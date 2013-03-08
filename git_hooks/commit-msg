@@ -1,0 +1,71 @@
+#!/usr/bin/python
+
+# checks the content of a commit message
+# arg 1 : commit message file
+# returns 0 if the message is valid, non-zero otherwise
+
+import sys
+import re
+
+def build_regex():
+	r_or = r"|"
+	r_id = r"[0-9]+"
+	r_id_list = r_id + r"( " + r_id +  r")*"
+	r_bugfix = r"BUGFIX " + r_id_list
+	r_coverity = r"COVERITY " + r_id_list
+	r_tag = r_bugfix + r_or + \
+		r"BUILD" + r_or + \
+		r_coverity + r_or + \
+		r"DEV" + r_or + \
+		r"DEVMINOR" + r_or + \
+		r"DEVMAJOR" + r_or + \
+		r"DOC" + r_or + \
+		r"GIT"
+
+	return r"\[(" + r_tag + ")\] .*"
+
+def commit_format_error():
+	print("[ERROR] No empty line between summary and detailed message")
+	print("""Commit message must have a one line 80 character long \
+summary, then an optional detailed message separated by an empty line.""")
+	exit(1)
+
+# TODO update according to regex
+def commit_summary_error():
+	print("[ERROR] Invalide message format");
+	print("""Valid commit message format is :
+                [TYPE_OF_COMMIT] commit message
+                where TYPE_OF_COMMIT is one of :
+                        DEVMAJOR
+                        DEVMINOR
+                        DEV
+                        DOC
+                        BUILD
+                and the total length is under 80 characters""")
+	exit(1)
+
+def read_commit_message(message_file):
+	with open(message_file) as f:
+		summary = f.readline().strip()
+		empty_line = f.readline()
+		detail = f.read()
+
+	return (summary, empty_line, detail)
+
+def main():
+	message_file = sys.argv[1]
+	(summary, empty_line, detail) = read_commit_message(message_file)
+
+	# if more than one line, the second one must be empty
+	if empty_line and len(empty_line) != 1:
+		commit_format_error()
+
+	# check the summary corresponds to the format and isn't too long
+	regex = build_regex()
+	if not re.match(regex, summary) or len(summary) > 80:
+		commit_summary_error()
+
+	# message is valid
+	exit(0)
+
+main()

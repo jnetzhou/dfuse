@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# pre-commit hook which :
+#  * runs checkpatch for conding-style policy enforcement
+#  * performs unit tests on the library by running "commit-unit-tests"
+
+set -e
+
+tag="[GIT PRE-COMMIT HOOK]"
+
+echo ${tag} Running checkpatch.pl on the commit
+
+if git rev-parse --verify HEAD 2>/dev/null >/dev/null
+then
+	against=HEAD
+else
+	# Initial commit: diff against an empty tree object
+	against=7921b0d931f2e795feb15f402770b3a8a8f08334
+fi
+
+git diff --cached $against -- | checkpatch.pl --no-signoff --no-tree -
+
+echo ${tag} Running unit tests
+
+commit-unit-tests
