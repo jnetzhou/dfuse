@@ -1,0 +1,18 @@
+				Adbfuse
+
+	Adbfuse is a fuse filesystem over an ADB (Android Debug Bridge) link.
+
+Build :
+	make
+
+Mount a filesystem over adb in the mnt directory :
+	./adbfuse mnt -d -o nonempty
+
+Unmount the filesystem, mounted on mnt :
+	fusermount -u mnt
+
+What works :
+	Nothing
+
+What doesn't work :
+	Everything
