@@ -20,7 +20,7 @@
  * @param mask
  * @return
  */
-static int adb_access(const char *path, int mask)
+static int df_access(const char *path, int mask)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -35,7 +35,7 @@ static int adb_access(const char *path, int mask)
  * @param mode
  * @return
  */
-static int adb_chmod(const char *path, mode_t mode)
+static int df_chmod(const char *path, mode_t mode)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -51,7 +51,7 @@ static int adb_chmod(const char *path, mode_t mode)
  * @param gid_t
  * @return
  */
-static int adb_chown(const char *path, uid_t uid, gid_t gid)
+static int df_chown(const char *path, uid_t uid, gid_t gid)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -67,7 +67,7 @@ static int adb_chown(const char *path, uid_t uid, gid_t gid)
  * @param stbuf
  * @return
  */
-static int adb_getattr(const char *path, struct stat *stbuf)
+static int df_getattr(const char *path, struct stat *stbuf)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -82,7 +82,7 @@ static int adb_getattr(const char *path, struct stat *stbuf)
  * @param mode
  * @return
  */
-static int adb_mkdir(const char *path, mode_t mode)
+static int df_mkdir(const char *path, mode_t mode)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -98,7 +98,7 @@ static int adb_mkdir(const char *path, mode_t mode)
  * @param rdev
  * @return
  */
-static int adb_mknod(const char *path, mode_t mode, dev_t rdev)
+static int df_mknod(const char *path, mode_t mode, dev_t rdev)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -113,7 +113,7 @@ static int adb_mknod(const char *path, mode_t mode, dev_t rdev)
  * @param fi
  * @return
  */
-static int adb_open(const char *path, struct fuse_file_info *fi)
+static int df_open(const char *path, struct fuse_file_info *fi)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -128,7 +128,7 @@ static int adb_open(const char *path, struct fuse_file_info *fi)
  * @param to
  * @return
  */
-static int adb_link(const char *from, const char *to)
+static int df_link(const char *from, const char *to)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -146,7 +146,7 @@ static int adb_link(const char *from, const char *to)
  * @param fi
  * @return
  */
-static int adb_read(const char *path, char *buf, size_t size, off_t offset,
+static int df_read(const char *path, char *buf, size_t size, off_t offset,
 		    struct fuse_file_info *fi)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
@@ -165,7 +165,7 @@ static int adb_read(const char *path, char *buf, size_t size, off_t offset,
  * @param fi
  * @return
  */
-static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
@@ -182,7 +182,7 @@ static int adb_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  * @param size
  * @return
  */
-static int adb_readlink(const char *path, char *buf, size_t size)
+static int df_readlink(const char *path, char *buf, size_t size)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -197,7 +197,7 @@ static int adb_readlink(const char *path, char *buf, size_t size)
  * @param to
  * @return
  */
-static int adb_rename(const char *from, const char *to)
+static int df_rename(const char *from, const char *to)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -211,7 +211,7 @@ static int adb_rename(const char *from, const char *to)
  * @param path
  * @return
  */
-static int adb_rmdir(const char *path)
+static int df_rmdir(const char *path)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -226,7 +226,7 @@ static int adb_rmdir(const char *path)
  * @param to
  * @return
  */
-static int adb_symlink(const char *from, const char *to)
+static int df_symlink(const char *from, const char *to)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -241,7 +241,7 @@ static int adb_symlink(const char *from, const char *to)
  * @param size
  * @return
  */
-static int adb_truncate(const char *path, off_t size)
+static int df_truncate(const char *path, off_t size)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -255,7 +255,7 @@ static int adb_truncate(const char *path, off_t size)
  * @param path
  * @return
  */
-static int adb_unlink(const char *path)
+static int df_unlink(const char *path)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
 
@@ -273,7 +273,7 @@ static int adb_unlink(const char *path)
  * @param fi
  * @return
  */
-static int adb_write(const char *path, const char *buf, size_t size,
+static int df_write(const char *path, const char *buf, size_t size,
 		     off_t offset, struct fuse_file_info *fi)
 {
 	fprintf(stderr, "%s STUB !!!\n", __func__);
@@ -281,27 +281,27 @@ static int adb_write(const char *path, const char *buf, size_t size,
 	return -ENOSYS;
 }
 
-static struct fuse_operations adb_oper = {
-	.access		= adb_access,
-	.chmod		= adb_chmod,
-	.chown		= adb_chown,
-	.getattr	= adb_getattr,
-	.mkdir		= adb_mkdir,
-	.mknod		= adb_mknod,
-	.open		= adb_open,
-	.link		= adb_link,
-	.read		= adb_read,
-	.readdir	= adb_readdir,
-	.readlink	= adb_readlink,
-	.rename		= adb_rename,
-	.rmdir		= adb_rmdir,
-	.symlink	= adb_symlink,
-	.truncate	= adb_truncate,
-	.unlink		= adb_unlink,
-	.write		= adb_write,
+static struct fuse_operations df_oper = {
+	.access		= df_access,
+	.chmod		= df_chmod,
+	.chown		= df_chown,
+	.getattr	= df_getattr,
+	.mkdir		= df_mkdir,
+	.mknod		= df_mknod,
+	.open		= df_open,
+	.link		= df_link,
+	.read		= df_read,
+	.readdir	= df_readdir,
+	.readlink	= df_readlink,
+	.rename		= df_rename,
+	.rmdir		= df_rmdir,
+	.symlink	= df_symlink,
+	.truncate	= df_truncate,
+	.unlink		= df_unlink,
+	.write		= df_write,
 };
 
 int main(int argc, char *argv[])
 {
-	return fuse_main(argc, argv, &adb_oper, NULL);
+	return fuse_main(argc, argv, &df_oper, NULL);
 }
