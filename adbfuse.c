@@ -8,6 +8,14 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include <sysdeps.h>
+
+#include <adb.h>
+#include <fdevent.h>
+#include <adb_client.h>
+
+#include "adb_bridge.h"
+
 #define FUSE_USE_VERSION 26
 
 #include <fuse.h>
@@ -168,9 +176,34 @@ static int df_read(const char *path, char *buf, size_t size, off_t offset,
 static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
-	fprintf(stderr, "%s STUB !!!\n", __func__);
+	int fd;
+	int ret;
+	void sync_ls_cb(unsigned mode, unsigned size, unsigned time,
+			const char *name, void *cookie)
+	{
+		struct stat st;
+		memset(&st, 0, sizeof(st));
+		st.st_mode = mode;
+		st.st_size = size;
+		st.st_mtime = time;
+		ret = filler(buf, name, NULL, 0);
+		if (0 > ret)
+			fprintf(stderr, "%s : %s\n",  __func__, adb_error());
+	}
 
-	return -ENOSYS;
+	fd = adb_connect("sync:");
+	if (0 > fd) {
+		fprintf(stderr, "error: %s\n", adb_error());
+		return -EIO;
+	}
+
+	ret = sync_ls(fd, path, sync_ls_cb, 0);
+	if (0 > ret)
+		return -EIO;
+
+	sync_quit(fd);
+
+	return 0;
 }
 
 /**
