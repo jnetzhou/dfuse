@@ -251,9 +251,51 @@ static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
  */
 static int df_readlink(const char *path, char *buf, size_t size)
 {
-	fprintf(stderr, "%s STUB !!!\n", __func__);
+	int shellfd;
+	int len;
+	int ret;
+	char *cmd;
+	char *arrow;
+	char *cr;
 
-	return -ENOSYS;
+	/* send "ls -l PATH" command */
+	ret = asprintf(&cmd, "shell:ls -l %s", path);
+	if (-1 == ret)
+		return -ENOMEM;
+	shellfd = adb_connect(cmd);
+	free(cmd);
+	if (0 > shellfd) {
+		fprintf(stderr, "shell error: %s\n", adb_error());
+		return -EIO;
+	}
+
+	/* read answer */
+	len = TEMP_FAILURE_RETRY(adb_read(shellfd, buf, size));
+	if (0 == len)
+		return -ENOENT;
+	if (0 > len)
+		return -errno;
+	if (len >= size)
+		return -ENOMEM;
+	adb_close(shellfd);
+
+	/* strip \n */
+	buf[len - 1] = '\0';
+	/* strip \r if any */
+	if (1 < len) {
+		cr = strchr(buf, '\r');
+		if (NULL != cr)
+			*cr = '\0';
+	}
+	/* the link target is after the " -> " pattern */
+	arrow = strstr(buf, " -> ");
+	if (NULL == arrow)
+		return -ENOENT;
+	arrow += 4;
+
+	memmove(buf, arrow, len - (arrow - buf));
+
+	return 0;
 }
 
 /**
