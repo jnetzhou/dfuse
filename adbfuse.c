@@ -13,6 +13,7 @@
 #include <adb.h>
 #include <fdevent.h>
 #include <adb_client.h>
+#include <file_sync_service.h>
 
 #include "adb_bridge.h"
 
@@ -77,9 +78,42 @@ static int df_chown(const char *path, uid_t uid, gid_t gid)
  */
 static int df_getattr(const char *path, struct stat *stbuf)
 {
-	fprintf(stderr, "%s STUB !!!\n", __func__);
+	int ret;
+	int len;
+	int syncfd;
+	syncmsg msg;
 
-	return -ENOSYS;
+	syncfd = adb_connect("sync:");
+	if (0 > syncfd) {
+		fprintf(stderr, "sync error: %s\n", adb_error());
+		return -EIO;
+	}
+
+	len = strlen(path);
+
+	msg.req.id = ID_STAT;
+	msg.req.namelen = htoll(len);
+	ret = writex(syncfd, &msg.req, sizeof(msg.req));
+	if (0 > ret)
+		return -errno;
+	ret = writex(syncfd, path, len);
+	if (0 > ret)
+		return -errno;
+
+	ret = readx(syncfd, &msg.stat, sizeof(msg.stat));
+	if (0 > ret)
+		return -errno;
+
+	if (msg.stat.id != ID_STAT)
+		return -EIO;
+
+	stbuf->st_mode = msg.stat.mode;
+	stbuf->st_size = msg.stat.size;
+	stbuf->st_mtime = msg.stat.time;
+
+	sync_quit(syncfd);
+
+	return 0;
 }
 
 /**
