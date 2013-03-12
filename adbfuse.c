@@ -210,8 +210,8 @@ static int df_read(const char *path, char *buf, size_t size, off_t offset,
 static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
-	int fd;
 	int ret;
+	int syncfd;
 	void sync_ls_cb(unsigned mode, unsigned size, unsigned time,
 			const char *name, void *cookie)
 	{
@@ -225,17 +225,17 @@ static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 			fprintf(stderr, "%s : %s\n",  __func__, adb_error());
 	}
 
-	fd = adb_connect("sync:");
-	if (0 > fd) {
-		fprintf(stderr, "error: %s\n", adb_error());
+	syncfd = adb_connect("sync:");
+	if (0 > syncfd) {
+		fprintf(stderr, "sync error: %s\n", adb_error());
 		return -EIO;
 	}
 
-	ret = sync_ls(fd, path, sync_ls_cb, 0);
+	ret = sync_ls(syncfd, path, sync_ls_cb, 0);
 	if (0 > ret)
 		return -EIO;
 
-	sync_quit(fd);
+	sync_quit(syncfd);
 
 	return 0;
 }
