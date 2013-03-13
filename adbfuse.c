@@ -410,7 +410,35 @@ static struct fuse_operations df_oper = {
 	.write		= df_write,
 };
 
+/**
+ * Says wheter we can talk to any device or not
+ * @return non-zero if a device is present and we can talk through a running
+ * adb host server
+ */
+static int can_talk_to_a_device()
+{
+	int hellofd;
+
+	/* check a server is a live and we can talk to it */
+	hellofd = _adb_connect("shell:ls");
+	if (0 > hellofd)
+		return 0;
+
+	adb_close(hellofd);
+
+	return 1;
+}
+
 int main(int argc, char *argv[])
 {
-	return fuse_main(argc, argv, &df_oper, NULL);
+	int ret;
+
+	if (!can_talk_to_a_device()) {
+		fprintf(stderr, "can't talk to a device : '%s'\n", adb_error());
+		return EXIT_FAILURE;
+	}
+
+	ret = fuse_main(argc, argv, &df_oper, NULL);
+
+	return ret;
 }
