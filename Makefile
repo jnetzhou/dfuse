@@ -1,4 +1,5 @@
-ADB_BASE := /home/nicolas/workspace/C/adbfuse/upstream/core/
+ADBFUSE_BASE := /home/nicolas/workspace/C/adbfuse/
+ADB_BASE := $(ADBFUSE_BASE)/upstream/core/
 ADB_SRC := \
 	adb.c \
 	console.c \
@@ -43,7 +44,10 @@ CFLAGS += -D_XOPEN_SOURCE -D_GNU_SOURCE
 CFLAGS += -DHAVE_FORKEXEC -DHAVE_TERMIO_H
 LDFLAGS += `pkg-config fuse --libs` -pthread -lrt -lncurses -lpthread -lcrypto
 
-VPATH := $(ADB_BASE)/adb:$(ADB_BASE)/libcutils:$(ADB_BASE)/libzipfile
+VPATH := $(ADBFUSE_BASE)
+VPATH += $(VPATH):$(ADB_BASE)/adb
+VPATH += $(VPATH):$(ADB_BASE)/libcutils
+VPATH += $(VPATH):$(ADB_BASE)/libzipfile
 
 all:$(BIN)
 
