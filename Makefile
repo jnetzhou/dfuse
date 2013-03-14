@@ -44,7 +44,7 @@ CFLAGS += -D_XOPEN_SOURCE -D_GNU_SOURCE
 CFLAGS += -DHAVE_FORKEXEC -DHAVE_TERMIO_H
 LDFLAGS += `pkg-config fuse --libs` -pthread -lrt -lncurses -lpthread -lcrypto
 
-VPATH := $(ADBFUSE_BASE)
+VPATH := $(ADBFUSE_BASE)/src/
 VPATH += $(VPATH):$(ADB_BASE)/adb
 VPATH += $(VPATH):$(ADB_BASE)/libcutils
 VPATH += $(VPATH):$(ADB_BASE)/libzipfile
