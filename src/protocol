@@ -1,0 +1,209 @@
+************* overview ********************************************************
+every numeric field is in network order (big endian)
+
+once connected, a handshake is initiated
+version is an uint32_t
+device send protocol version
+host send protocol version
+on mismatch, both terminate
+
+then host sends requests and the client sends answers, both with the same
+fixed length packet format :
+	a 8 bytes header, followed by a payload of size 3 * PATH_MAX
+
+this size is choosen so that nearly all operations fit in one request and on
+answer, apart for readdir. plus, the small size should guarantee atomicity for
+datagram packets (TODO check that)
+
+#define HEADER_SIZE 8
+
+when the host quits, it sends a bye bye message and devices replies bye bye too
+
+bye bye message :
+ * host
++------------+---------+--------------+----------------+---------+--------------+------------+
+| request_id | part_id | payload_size | end_of_request | op_code | zero_padding | payload    |
++------------+---------+--------------+----------------+---------+--------------+------------+
+|  0         |  0      |  8           |  1             |  QUIT   |  0           |  "bye bye" |
++------------+---------+--------------+----------------+---------+--------------+------------+
+ * device
++------------+---------+--------------+---------------+--------------+--------+------------+
+| request_id | part_id | payload_size | end_of_answer | zero_padding | return | payload    |
++------------+---------+--------------+---------------+--------------+--------+------------+
+|  0         |  0      |  8           |  1            |  0           |  0     |  "bye bye" |
++------------+---------+--------------+---------------+--------------+--------+------------+
+
+************* fuse operations roughly sorted by priority **********************
+
+readdir(const char *path, void *buf, fuse_fill_dir_t filler, off_t offset,
+		struct fuse_file_info *fi)
+TODO add support for closedir/opendir in a second step
+getattr(const char *path, struct stat *stbuf)
+readlink(const char *path, char *buf, size_t size)
+mkdir(const char *path, mode_t mode)
+open(const char *path, struct fuse_file_info *fi)
+release(const char *path, struct fuse_file_info *fi)
+read(const char *path, char *buf, size_t size, off_t offset,
+		struct fuse_file_info *fi)
+write(const char *path, const char *buf, size_t size, off_t offset,
+		struct fuse_file_info *fi)
+unlink(const char *path)
+rmdir(const char *path)
+
+truncate(const char *path, off_t size)
+rename(const char *from, const char *to)
+chmod(const char *path, mode_t mode)
+chown(const char *path, uid_t uid, gid_t gid)
+access(const char *path, int mask)
+symlink(const char *from, const char *to)
+link(const char *from, const char *to)
+
+mknod(const char *path, mode_t mode, dev_t rdev)
+utimens(const char *path, const struct timespec ts[2])
+statfs(const char *path, struct statvfs *stbuf)
+fsync(const char *path, int isdatasync, struct fuse_file_info *fi)
+fallocate(const char *path, int mode, off_t offset, off_t length,
+		struct fuse_file_info *fi)
+setxattr(const char *path, const char *name, const char *value, size_t size,
+		int flags)
+getxattr(const char *path, const char *name, char *value, size_t size)
+listxattr(const char *path, char *list, size_t size)
+removexattr(const char *path, const char *name)
+
+************* data types transferred ******************************************
+all data structures should respect the size of the host.
+maybe some compilation check could enforce it as a first step...
+for requests, only input parameters are passed
+for anwswers, only output parameters are passed
+
+nul-terminated strings
+
+note : all the following structures have ints as fields, so everything will be
+converted to big endian 64 ints before transfert and back, after
+htobe64
+be64toh
+
+
+struct stat {
+	dev_t     st_dev;     /* ID of device containing file */
+	ino_t     st_ino;     /* inode number */
+	mode_t    st_mode;    /* protection */
+	nlink_t   st_nlink;   /* number of hard links */
+	uid_t     st_uid;     /* user ID of owner */
+	gid_t     st_gid;     /* group ID of owner */
+	dev_t     st_rdev;    /* device ID (if special file) */
+	off_t     st_size;    /* total size, in bytes */
+	blksize_t st_blksize; /* blocksize for file system I/O */
+	blkcnt_t  st_blocks;  /* number of 512B blocks allocated */
+	time_t    st_atime;   /* time of last access */
+	time_t    st_mtime;   /* time of last modification */
+	time_t    st_ctime;   /* time of last status change */
+};
+
+struct fuse_file_info {
+	int flags; /** Open flags.	 Available in open() and release() */
+	unsigned long fh_old; /** Old file handle, don't use */
+	int writepage; /** In case of a write operation indicates if this was caused by a writepage */
+	unsigned int direct_io : 1; /** Can be filled in by open, to use direct I/O on this file. Introduced in version 2.4 */
+	unsigned int keep_cache : 1; /** Can be filled in by open, to indicate, that cached file data
+	    need not be invalidated.  Introduced in version 2.4 */
+	unsigned int flush : 1; /** Indicates a flush operation.  Set in flush operation, also
+	    maybe set in highlevel lock operation and lowlevel release
+	    operation.	Introduced in version 2.6 */
+	unsigned int nonseekable : 1; /** Can be filled in by open, to indicate that the file is not seekable.  Introduced in version 2.8 */
+	unsigned int flock_release : 1; /* Indicates that flock locks for this file should be
+	   released.  If set, lock_owner shall contain a valid value.
+	   May only be set in ->release().  Introduced in version
+	   2.9 */
+	unsigned int padding : 27; /** Padding.  Do not use*/
+	/* TODO values overflowing from int64t_t must be filtered out */
+	uint64_t fh; /** File handle.  May be filled in by filesystem in open(). Available in all other file operations */
+	/* TODO don't use this field, or check for overflows when cast to an uint64_t */
+	uint64_t lock_owner; /** Lock owner id.  Available in locking operations and flush */
+};
+
+struct stat {
+	dev_t     st_dev;     /* ID of device containing file */
+	ino_t     st_ino;     /* inode number */
+	mode_t    st_mode;    /* protection */
+	nlink_t   st_nlink;   /* number of hard links */
+	uid_t     st_uid;     /* user ID of owner */
+	gid_t     st_gid;     /* group ID of owner */
+	dev_t     st_rdev;    /* device ID (if special file) */
+	off_t     st_size;    /* total size, in bytes */
+	blksize_t st_blksize; /* blocksize for file system I/O */
+	blkcnt_t  st_blocks;  /* number of 512B blocks allocated */
+	time_t    st_atime;   /* time of last access */
+	time_t    st_mtime;   /* time of last modification */
+	time_t    st_ctime;   /* time of last status change */
+};
+
+struct timespec {
+	time_t tv_sec;        /* seconds */
+	long   tv_nsec;       /* nanoseconds */
+};
+
+struct statvfs {
+	unsigned long  f_bsize;    /* file system block size */
+	unsigned long  f_frsize;   /* fragment size */
+	fsblkcnt_t     f_blocks;   /* size of fs in f_frsize units */
+	fsblkcnt_t     f_bfree;    /* # free blocks */
+	fsblkcnt_t     f_bavail;   /* # free blocks for unprivileged users */
+	fsfilcnt_t     f_files;    /* # inodes */
+	fsfilcnt_t     f_ffree;    /* # free inodes */
+	fsfilcnt_t     f_favail;   /* # free inodes for unprivileged users */
+	unsigned long  f_fsid;     /* file system ID */
+	unsigned long  f_flag;     /* mount flags */
+	unsigned long  f_namemax;  /* maximum filename length */
+};
+
+************* host requests message format ************************************
+header should be :
+struct host_message {
+	/** unique id use in a request's packet match that of answer(s) */
+	uint8_t request_id;
+	/** id of the paquet for a given request_id */
+	uint8_t part_id;
+	/** size of useful data in the payload part of the packet */
+	uint16 payload_size;
+	/** non zero if this paquet is the last of the request */
+	uint8_t end_of_request;
+	/** code of the operation requested */
+	uint8_t op_code;
+	/** for header alignment on 64bit */
+	uint16_t zero_padding;
+	/** actual data of the message (function in parameters) */
+	char payload[3 * PATH_MAX - HEADER_SIZE]
+};
+
+payload depends on the operations :
+
+************* device answer message format ************************************
+header should be :
+struct host_message {
+	/** unique id use in a answer's packet which matches that of request */
+	uint8_t request_id;
+	/** id of the paquet for a given request_id */
+	uint8_t part_id;
+	/** size of useful data in the payload part of the packet */
+	uint16 payload_size;
+	/** non zero if this paquet is the last of the answer */
+	uint8_t end_of_answer;
+	/** for header alignment on 64bit */
+	uint8_t zero_padding;
+	/** return code i.e. function return value */
+	uint16_t return;
+	/** actual data of the message (function out parameters) */
+	char payload[3 * PATH_MAX - HEADER_SIZE]
+};
+
+payload :
+	on error, array of chars containing a NULL terminated string decribing
+	the error in ascii
+	on success, data marshalled as follows
+		integer values : stored in an int64_t
+		the only remaining problematic values are uint64 values, but
+		either out-of-range values can be filtered out, either the
+		corresponding field shouldn't be used
+
+
