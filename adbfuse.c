@@ -9,7 +9,6 @@
 #include <errno.h>
 
 #include <sysdeps.h>
-
 #include <adb.h>
 #include <fdevent.h>
 #include <adb_client.h>
@@ -421,6 +420,10 @@ static int can_talk_to_a_device()
 
 	/* check a server is a live and we can talk to it */
 	hellofd = _adb_connect("shell:ls");
+	/*
+	 * TODO on success, keeptrack of the device serial and use it until the
+	 * end to avoid TOCTTOU
+	 */
 	if (0 > hellofd)
 		return 0;
 
@@ -429,6 +432,7 @@ static int can_talk_to_a_device()
 	return 1;
 }
 
+/* ./misc/adb forward tcp:6665 tcp:6666 */
 int main(int argc, char *argv[])
 {
 	int ret;
