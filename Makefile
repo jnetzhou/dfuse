@@ -29,7 +29,7 @@ CUTILS_SRC := \
 	socket_inaddr_any_server.c \
 	list.c \
 	load_file.c
-SRC := adbfuse.c
+SRC := dfuse_host.c
 SRC += $(ADB_SRC)
 SRC += $(ZIPFILE_SRC)
 SRC += $(CUTILS_SRC)

@@ -1,9 +1,9 @@
 /**
- * @file adbfuse.c
+ * @file dfuse_host.c
  * @author carrier.nicolas0@gmail.com
  * @date 08 mar. 2013
  *
- * Fuse file system over the adb protocol
+ * dfuse, or droid fuse : file system in userspace over the adb protocol
  */
 #include <stdio.h>
 #include <errno.h>
