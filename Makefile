@@ -29,7 +29,10 @@ CUTILS_SRC := \
 	socket_inaddr_any_server.c \
 	list.c \
 	load_file.c
-SRC := dfuse_host.c
+SRC := df_host.c \
+       df_protocol.c \
+       df_io.c
+
 SRC += $(ADB_SRC)
 SRC += $(ZIPFILE_SRC)
 SRC += $(CUTILS_SRC)

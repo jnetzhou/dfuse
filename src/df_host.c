@@ -1,5 +1,5 @@
 /**
- * @file dfuse_host.c
+ * @file df_host.c
  * @author carrier.nicolas0@gmail.com
  * @date 08 mar. 2013
  *
@@ -14,11 +14,18 @@
 #include <adb_client.h>
 #include <file_sync_service.h>
 
-#include "adb_bridge.h"
-
 #define FUSE_USE_VERSION 26
 
 #include <fuse.h>
+
+#include "adb_bridge.h"
+#include "df_protocol.h"
+
+/**
+ * @var sock
+ * @brief socket opened on the device, via which file system request will pass
+ */
+/* static int sock; */
 
 /**
  * TODO
@@ -414,7 +421,7 @@ static struct fuse_operations df_oper = {
  * @return non-zero if a device is present and we can talk through a running
  * adb host server
  */
-static int can_talk_to_a_device()
+/*static*/ int can_talk_to_a_device()
 {
 	int hellofd;
 
@@ -437,10 +444,12 @@ int main(int argc, char *argv[])
 {
 	int ret;
 
+	/* TODO set up forwarding to device
 	if (!can_talk_to_a_device()) {
 		fprintf(stderr, "can't talk to a device : '%s'\n", adb_error());
 		return EXIT_FAILURE;
 	}
+	*/
 
 	ret = fuse_main(argc, argv, &df_oper, NULL);
 

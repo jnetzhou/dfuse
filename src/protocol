@@ -3,8 +3,8 @@ every numeric field is in network order (big endian)
 
 once connected, a handshake is initiated
 version is an uint32_t
+host send protocol version (in big endian)
 device send protocol version
-host send protocol version
 on mismatch, both terminate
 
 then host sends requests and the client sends answers, both with the same
@@ -15,7 +15,7 @@ this size is choosen so that nearly all operations fit in one request and on
 answer, apart for readdir. plus, the small size should guarantee atomicity for
 datagram packets (TODO check that)
 
-#define HEADER_SIZE 8
+#define DF_HEADER_SIZE 8
 
 when the host quits, it sends a bye bye message and devices replies bye bye too
 
@@ -27,11 +27,11 @@ bye bye message :
 |  0         |  0      |  8           |  1             |  QUIT   |  0           |  "bye bye" |
 +------------+---------+--------------+----------------+---------+--------------+------------+
  * device
-+------------+---------+--------------+---------------+--------------+--------+------------+
-| request_id | part_id | payload_size | end_of_answer | zero_padding | return | payload    |
-+------------+---------+--------------+---------------+--------------+--------+------------+
-|  0         |  0      |  8           |  1            |  0           |  0     |  "bye bye" |
-+------------+---------+--------------+---------------+--------------+--------+------------+
++------------+---------+--------------+---------------+--------------+-------+------------+
+| request_id | part_id | payload_size | end_of_answer | zero_padding | error | payload    |
++------------+---------+--------------+---------------+--------------+-------+------------+
+|  0         |  0      |  8           |  1            |  0           |  0    |  "bye bye" |
++------------+---------+--------------+---------------+--------------+-------+------------+
 
 ************* fuse operations roughly sorted by priority **********************
 
@@ -82,23 +82,6 @@ note : all the following structures have ints as fields, so everything will be
 converted to big endian 64 ints before transfert and back, after
 htobe64
 be64toh
-
-
-struct stat {
-	dev_t     st_dev;     /* ID of device containing file */
-	ino_t     st_ino;     /* inode number */
-	mode_t    st_mode;    /* protection */
-	nlink_t   st_nlink;   /* number of hard links */
-	uid_t     st_uid;     /* user ID of owner */
-	gid_t     st_gid;     /* group ID of owner */
-	dev_t     st_rdev;    /* device ID (if special file) */
-	off_t     st_size;    /* total size, in bytes */
-	blksize_t st_blksize; /* blocksize for file system I/O */
-	blkcnt_t  st_blocks;  /* number of 512B blocks allocated */
-	time_t    st_atime;   /* time of last access */
-	time_t    st_mtime;   /* time of last modification */
-	time_t    st_ctime;   /* time of last status change */
-};
 
 struct fuse_file_info {
 	int flags; /** Open flags.	 Available in open() and release() */
@@ -191,8 +174,8 @@ struct host_message {
 	uint8_t end_of_answer;
 	/** for header alignment on 64bit */
 	uint8_t zero_padding;
-	/** return code i.e. function return value */
-	uint16_t return;
+	/** error code i.e. function return value */
+	uint16_t error;
 	/** actual data of the message (function out parameters) */
 	char payload[3 * PATH_MAX - HEADER_SIZE]
 };
