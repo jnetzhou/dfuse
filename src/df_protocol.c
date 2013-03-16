@@ -213,8 +213,14 @@ out:
 /* write an entire message, header + payload */
 int df_write_message(int fd, struct df_packet_header *header, char *payload)
 {
+	ssize_t ret;
 
-	return 0;
+	if (0 > fd || NULL == header || NULL == payload)
+		return -EINVAL;
+
+	ret = df_write(fd, header, sizeof(*header));
+	if (0 > ret)
+		return ret;
+
+	return df_write(fd, payload, header->payload_size);
 }
-
-
