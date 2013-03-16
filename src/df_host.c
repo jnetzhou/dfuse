@@ -25,7 +25,8 @@
 #include "adb_bridge.h"
 #include "df_protocol.h"
 
-#define DF_SERVER_PORT 6665
+/* #define DF_HOST_PORT 6665 */
+#define DF_HOST_PORT 6666
 
 /**
  * @var sock
@@ -452,7 +453,7 @@ int main(int argc, char *argv[])
 	uint32_t device_version = 0;
 	struct sockaddr_in addr;
 	struct sockaddr_in cli_addr;
-	socklen_t sock_len = sizeof(cli_addr);
+	socklen_t addr_len = sizeof(addr);
 	int srv_sock;
 
 	/* TODO set up forwarding to device
@@ -462,18 +463,18 @@ int main(int argc, char *argv[])
 	}
 	*/
 
-	srv_sock = socket(AF_INET, SOCK_STREAM, 0);
+	srv_sock = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (-1 == srv_sock) {
 		perror("socket");
 		return EXIT_FAILURE;
 	}
 
-	memset(&addr, 0, sizeof(addr));
+	memset(&addr, 0, addr_len);
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = INADDR_ANY;
-	addr.sin_port = htons(DF_SERVER_PORT);
+	addr.sin_port = htons(DF_HOST_PORT);
 
-	ret = bind(srv_sock, (struct sockaddr *) &addr, sock_len);
+	ret = bind(srv_sock, (struct sockaddr *)&addr, addr_len);
 	if (-1 == ret) {
 		perror("bind");
 		return EXIT_FAILURE;
@@ -485,7 +486,12 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 
-	sock = accept4(srv_sock, (struct sockaddr *)&cli_addr, &sock_len,
+	/* TODO launch the client */
+
+	printf("Waiting for client\n");
+
+	memset(&cli_addr, 0, addr_len);
+	sock = accept4(srv_sock, (struct sockaddr *)&cli_addr, &addr_len,
 			SOCK_CLOEXEC);
 	if (-1 == ret) {
 		perror("accept");
@@ -502,15 +508,11 @@ int main(int argc, char *argv[])
 	if (0 > ret)
 		return EXIT_FAILURE;
 
-	if (device_version == DF_PROTOCOL_VERSION)
-		printf("protocols do correspond\n");
-	else
+	if (device_version != DF_PROTOCOL_VERSION) {
 		printf("protocol version mismatch, host : %u, device : %u\n",
 				DF_PROTOCOL_VERSION, device_version);
+		return EXIT_FAILURE;
+	}
 
-	return EXIT_SUCCESS;
-
-	ret = fuse_main(argc, argv, &df_oper, NULL);
-
-	return ret;
+	return fuse_main(argc, argv, &df_oper, NULL);
 }
