@@ -413,7 +413,92 @@ static struct fuse_operations xmp_oper = {
 #endif
 };
 
-int main(int argc, char *argv[])
+int action_enosys(int sock, struct df_packet_header *header, char *payload)
+{
+	struct df_packet_header answer_header;
+	char answer_payload[] = "ENOSYS";
+
+	/** TODO gcc warning */
+	payload = payload;
+
+	memset(&answer_header, 0, sizeof(answer_header));
+	answer_header.request_id = header->request_id;
+	answer_header.payload_size = header->request_id;
+	answer_header.device.end_of_answer = 1;
+	answer_header.device.error = ENOSYS;
+
+	return df_write_message(sock, &answer_header, answer_payload);
+}
+
+typedef int (*action_t)(int sock, struct df_packet_header *header,
+		char *payload);
+
+static action_t dispatch_table[] = {
+	[DF_OP_INVALID] = action_enosys,
+	[DF_OP_READDIR] = action_enosys,
+
+	[DF_OP_GETATTR] = action_enosys,
+	[DF_OP_READLINK] = action_enosys,
+	[DF_OP_MKDIR] = action_enosys,
+	[DF_OP_OPEN] = action_enosys,
+	[DF_OP_RELEASE] = action_enosys,
+	[DF_OP_READ] = action_enosys,
+	[DF_OP_WRITE] = action_enosys,
+	[DF_OP_UNLINK] = action_enosys,
+	[DF_OP_RMDIR] = action_enosys,
+
+	[DF_OP_TRUNCATE] = action_enosys,
+	[DF_OP_RENAME] = action_enosys,
+	[DF_OP_CHMOD] = action_enosys,
+	[DF_OP_CHOWN] = action_enosys,
+	[DF_OP_ACCESS] = action_enosys,
+	[DF_OP_SYMLINK] = action_enosys,
+	[DF_OP_LINK] = action_enosys,
+
+	[DF_OP_MKNOD] = action_enosys,
+	[DF_OP_UTIMENS] = action_enosys,
+	[DF_OP_STATFS] = action_enosys,
+	[DF_OP_FSYNC] = action_enosys,
+	[DF_OP_FALLOCATE] = action_enosys,
+	[DF_OP_SETXATTR] = action_enosys,
+	[DF_OP_GETXATTR] = action_enosys,
+	[DF_OP_LISTXATTR] = action_enosys,
+	[DF_OP_REMOVEXATTR] = action_enosys,
+
+	[DF_OP_QUIT] = action_enosys,
+};
+
+static int dispatch(int sock, struct df_packet_header *header, char *payload)
+{
+	/* TODO add some checking ? */
+	return dispatch_table[header->host.op_code](sock, header, payload);
+}
+
+static int event_loop(int sock)
+{
+	int ret;
+	struct df_packet_header header;
+	char *payload;
+
+	do {
+		memset(&header, 0, sizeof(header));
+
+		ret = df_read_message(sock, &header, &payload);
+		if (0 > ret)
+			goto out;
+
+		free(payload);
+		payload = NULL;
+		ret = dispatch(sock, &header, payload);
+		if (0 > ret)
+			goto out;
+	} while (header.host.op_code != DF_OP_QUIT);
+out:
+
+	return ret;
+}
+
+int main(void)
 {
 	int sock;
 	int ret;
@@ -455,8 +540,8 @@ int main(int argc, char *argv[])
 				host_version, DF_PROTOCOL_VERSION);
 		return EXIT_FAILURE;
 	}
+	return event_loop(sock);
 
-	return EXIT_SUCCESS;
-	umask(0);
-	return fuse_main(argc, argv, &xmp_oper, NULL);
+	/* TODO gcc warning */
+	printf("%p\n", &xmp_oper);
 }
