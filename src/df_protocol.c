@@ -8,6 +8,7 @@
 
 #include "df_protocol.h"
 #include "df_io.h"
+#include "df_data_types.h"
 
 int df_send_handshake(int fd, uint32_t prot_version)
 {
@@ -85,76 +86,89 @@ int df_read_message(int fd, struct df_packet_header *header, char **payload)
 	return 0;
 }
 
-/*
-	DF_DATA_FUSE_FILE_INFO,
-	DF_DATA_INT,
-	DF_DATA_STAT,
-	DF_DATA_STATVFS,
-	DF_DATA_STRING_,
-	DF_DATA_STRING_LIST,
-	DF_DATA_TIMESPEC,
- */
-/**
- *
- * @param ms Marshalled struct
- */
-static void marshalled_struct_to_be64(int64_t *ms, int size)
+/* reallocates space to append new data to the payload */
+static int adjust_payload(char **payload, size_t *size, size_t data_size)
 {
-	while (size--)
-		ms[size] = htobe64(ms[size]);
-}
-
-#define MARSHALLED_FFI_FIELDS 6
-
-static int marshall_fuse_file_info(struct fuse_file_info *ffi,
-		int64_t *marshalled_ffi)
-{
-	if (NULL == ffi || NULL == marshalled_ffi)
-		return -EINVAL;
-
-	marshalled_ffi[0] = ffi->flags;
-	marshalled_ffi[1] = ffi->fh_old;
-	marshalled_ffi[2] = (ffi->direct_io << 0) +
-		(ffi->keep_cache << 1) +
-		(ffi->flush << 2) +
-		(ffi->nonseekable << 3) +
-		(ffi->flock_release << 4);
-	marshalled_ffi[3] = ffi->padding;
-	marshalled_ffi[4] = ffi->fh;
-	marshalled_ffi[5] = ffi->lock_owner;
-
-	marshalled_struct_to_be64(marshalled_ffi, MARSHALLED_FFI_FIELDS);
-
-	return 0;
-}
-
-static int append_fuse_file_info(char **payload, size_t *size,
-		struct fuse_file_info *ffi)
-{
-	int64_t marshalled_ffi[MARSHALLED_FFI_FIELDS];
-	int ret;
 	size_t new_size;
-	size_t m_ffi_size = MARSHALLED_FFI_FIELDS * sizeof(int64_t);
 	char *new_payload;
 
-	if (NULL == size || NULL == ffi)
-		return -EINVAL;
-
-	ret = marshall_fuse_file_info(ffi, marshalled_ffi);
-	if (0 > ret)
-		return ret;
-
-	new_size = *size + m_ffi_size;
+	new_size = *size + data_size;
 	new_payload = realloc(*payload, new_size);
 	if (NULL == new_payload)
 		return -errno;
 	*payload = new_payload;
 
-	memcpy(*payload + *size, marshalled_ffi, m_ffi_size);
-	*size = new_size;
+	return 0;
+}
+
+/* adjusts the size of the payload and appends the data at it's end */
+static int append_data(char **payload, size_t *size, void *marshalled_data,
+		size_t marshalled_data_size)
+{
+	int ret;
+
+	ret = adjust_payload(payload, size, MARSHALLED_FFI_SIZE);
+	if (0 > ret)
+		return ret;
+
+	memcpy(*payload + *size, marshalled_data, marshalled_data_size);
+	*size = *size + marshalled_data_size;
 
 	return 0;
 }
+
+/* marshalls a ffi struct and append it to the payload resized to contain it */
+static int append_fuse_file_info(char **payload, size_t *size,
+		struct fuse_file_info *data)
+{
+	int64_t marshalled_ffi[MARSHALLED_FFI_FIELDS];
+
+	marshall_fuse_file_info(data, marshalled_ffi);
+
+	return append_data(payload, size, marshalled_ffi, MARSHALLED_FFI_SIZE);
+}
+
+static int append_int(char **payload, size_t *size, int64_t data)
+{
+	data = htobe64(data);
+
+	return append_data(payload, size, &data, sizeof(data));
+}
+
+static int append_stat(char **payload, size_t *size, struct stat *data)
+{
+	int64_t marshalled_stat[MARSHALLED_STAT_FIELDS];
+
+	marshall_stat(data, marshalled_stat);
+
+	return append_data(payload, size, marshalled_stat,
+			MARSHALLED_STAT_SIZE);
+}
+static int append_statvfs(char **payload, size_t *size, struct statvfs *data)
+{
+	int64_t marshalled_statvfs[MARSHALLED_STATVFS_FIELDS];
+
+	marshall_statvfs(data, marshalled_statvfs);
+
+	return append_data(payload, size, marshalled_statvfs,
+			MARSHALLED_STATVFS_SIZE);
+}
+
+static int append_string(char **payload, size_t *size, char *data)
+{
+	return append_data(payload, size, data, strlen(data));
+}
+
+static int append_timespec(char **payload, size_t *size, struct timespec *data)
+{
+	int64_t marshalled_timespec[MARSHALLED_TIMESPEC_FIELDS];
+
+	marshall_timespec(data, marshalled_timespec);
+
+	return append_data(payload, size, marshalled_timespec,
+			MARSHALLED_TIMESPEC_SIZE);
+}
+
 
 int df_build_payload(char **payload, size_t *size, ...)
 {
@@ -162,7 +176,16 @@ int df_build_payload(char **payload, size_t *size, ...)
 	enum df_data_type data_type;
 	int loop = 1;
 	int ret = 1;
-	struct fuse_file_info ffi;
+
+	/* data types */
+	void *buffer_data;
+	size_t buffer_size;
+	struct fuse_file_info ffi_data;
+	int64_t int_data;
+	struct stat stat_data;
+	struct statvfs statvfs_data;
+	char *string_data;
+	struct timespec timespec_data;
 
 	if (NULL == payload || NULL != *payload || NULL == size)
 		return -EINVAL;
@@ -171,35 +194,70 @@ int df_build_payload(char **payload, size_t *size, ...)
 	va_start(args, size);
 	do {
 		data_type = va_arg(args, enum df_data_type);
+		/* prefix each datum by it's type */
+		ret = append_int(payload, size, data_type);
+		if (0 > ret)
+			goto out;
+
 		switch (data_type) {
+		case DF_DATA_BUFFER:
+			buffer_data = va_arg(args, void *);
+			buffer_size = va_arg(args, size_t);
+			ret = append_data(payload, size, buffer_data,
+					buffer_size);
+			if (0 > ret)
+				goto out;
+			break;
+
 		case DF_DATA_FUSE_FILE_INFO:
-			ffi = va_arg(args, struct fuse_file_info);
-			ret = append_fuse_file_info(payload, size, &ffi);
+			ffi_data = va_arg(args, struct fuse_file_info);
+			ret = append_fuse_file_info(payload, size, &ffi_data);
 			if (0 > ret)
 				goto out;
 			break;
 
 		case DF_DATA_INT:
+			int_data = va_arg(args, int64_t);
+			ret = append_int(payload, size, int_data);
+			if (0 > ret)
+				goto out;
 			break;
 
 		case DF_DATA_STAT:
+			stat_data = va_arg(args, struct stat);
+			ret = append_stat(payload, size, &stat_data);
+			if (0 > ret)
+				goto out;
 			break;
 
 		case DF_DATA_STATVFS:
+			statvfs_data = va_arg(args, struct statvfs);
+			ret = append_statvfs(payload, size, &statvfs_data);
+			if (0 > ret)
+				goto out;
 			break;
 
-		case DF_DATA_STRING_:
-			break;
-
-		case DF_DATA_STRING_LIST:
+		case DF_DATA_STRING:
+			string_data = va_arg(args, char *);
+			ret = append_string(payload, size, string_data);
+			if (0 > ret)
+				goto out;
 			break;
 
 		case DF_DATA_TIMESPEC:
+			timespec_data = va_arg(args, struct timespec);
+			ret = append_timespec(payload, size, &timespec_data);
+			if (0 > ret)
+				goto out;
 			break;
 
+		case DF_DATA_STRING_LIST:
+			ret = -EINVAL;
+			goto out;
 
-		case DF_DATA_INVALID:
+		case DF_DATA_END:
 			loop = 0;
+			ret = 0;
 			break;
 		}
 	} while (loop);

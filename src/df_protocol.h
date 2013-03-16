@@ -3,7 +3,7 @@
 
 #define DF_HEADER_SIZE 8
 
-#define DF_PROTOCOL_VERSION 1
+#define DF_PROTOCOL_VERSION 1U
 
 /* list of the options supported */
 enum df_op {
@@ -38,6 +38,8 @@ enum df_op {
 	DF_OP_GETXATTR,
 	DF_OP_LISTXATTR,
 	DF_OP_REMOVEXATTR,
+
+	DF_OP_QUIT, /**< send a "bye bye" message */
 };
 
 /* packet header, aligned on 64bits */
@@ -79,13 +81,14 @@ struct df_packet_header {
 
 /* types of data exchanged */
 enum df_data_type {
-	DF_DATA_INVALID = 0,
+	DF_DATA_END = 0,
 
+	DF_DATA_BUFFER,
 	DF_DATA_FUSE_FILE_INFO,
 	DF_DATA_INT,
 	DF_DATA_STAT,
 	DF_DATA_STATVFS,
-	DF_DATA_STRING_,
+	DF_DATA_STRING,
 	DF_DATA_STRING_LIST,
 	DF_DATA_TIMESPEC,
 };
@@ -94,7 +97,6 @@ int df_send_handshake(int fd, uint32_t prot_version);
 
 int df_read_handshake(int fd, uint32_t *prot_version);
 
-/* concatenate both two previous into : */
 int df_read_message(int fd, struct df_packet_header *header, char **payload);
 
 /**
