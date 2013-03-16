@@ -8,6 +8,9 @@
 
   gcc -Wall fusexmp.c `pkg-config fuse --cflags --libs` -o fusexmp
 */
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/ip.h>
 
 #define FUSE_USE_VERSION 26
 
@@ -20,6 +23,7 @@
 #define _XOPEN_SOURCE 700
 #endif
 
+#include <stdlib.h>
 #include <fuse.h>
 #include <stdio.h>
 #include <string.h>
@@ -32,6 +36,10 @@
 #ifdef HAVE_SETXATTR
 #include <sys/xattr.h>
 #endif
+
+#include "df_protocol.h"
+
+#define DF_DEVICE_PORT 6666
 
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
@@ -407,6 +415,48 @@ static struct fuse_operations xmp_oper = {
 
 int main(int argc, char *argv[])
 {
+	int sock;
+	int ret;
+	struct sockaddr_in addr;
+	socklen_t addr_len = sizeof(addr);
+	uint32_t host_version;
+
+	sock = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (0 > sock) {
+		perror("socket");
+		return EXIT_FAILURE;
+	}
+
+	memset(&addr, 0, addr_len);
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr.sin_port = htons(DF_DEVICE_PORT);
+
+	printf("Attempt to connect to host\n");
+
+	ret = connect(sock, (struct sockaddr *)&addr, addr_len);
+	if (0 > ret) {
+		perror("socket");
+		return EXIT_FAILURE;
+	}
+
+	printf("Connected to host\n");
+
+	ret = df_read_handshake(sock, &host_version);
+	if (0 > ret)
+		return EXIT_FAILURE;
+
+	ret = df_send_handshake(sock, DF_PROTOCOL_VERSION);
+	if (0 > ret)
+		return EXIT_FAILURE;
+
+	if (host_version != DF_PROTOCOL_VERSION) {
+		printf("protocol version mismatch, host : %u, device : %u\n",
+				host_version, DF_PROTOCOL_VERSION);
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
 	umask(0);
 	return fuse_main(argc, argv, &xmp_oper, NULL);
 }
