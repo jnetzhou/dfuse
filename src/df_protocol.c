@@ -7,15 +7,30 @@
 #include <fuse.h>
 
 #include "df_protocol.h"
+#include "df_io.h"
 
 int df_send_handshake(int fd, uint32_t prot_version)
 {
+	ssize_t ret;
+
+	prot_version = htobe32(prot_version);
+
+	ret = df_write(fd, &prot_version, sizeof(prot_version));
+	if (0 > ret)
+		return -errno;
 
 	return 0;
 }
 
 int df_read_handshake(int fd, uint32_t *prot_version)
 {
+	ssize_t ret;
+
+	ret = df_read(fd, prot_version, sizeof(*prot_version));
+	if (0 > ret)
+		return -errno;
+
+	*prot_version = htobe32(*prot_version);
 
 	return 0;
 }
