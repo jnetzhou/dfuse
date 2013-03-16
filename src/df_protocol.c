@@ -35,9 +35,24 @@ int df_read_handshake(int fd, uint32_t *prot_version)
 	return 0;
 }
 
+/* converts back a header from big endian to host order */
+static void unmarshall_header(struct df_packet_header *header)
+{
+	header->payload_size = be16toh(header->payload_size);
+	if (header->generic.is_host_packet)
+		header->device.error = be16toh(header->device.error);
+}
+
 /* reads a message header */
 static int read_header(int fd, struct df_packet_header *header)
 {
+	ssize_t ret;
+
+	ret = df_read(fd, header, sizeof(*header));
+	if (0 > ret)
+		return ret;
+
+	unmarshall_header(header);
 
 	return 0;
 }
@@ -45,8 +60,11 @@ static int read_header(int fd, struct df_packet_header *header)
 /* reads a payload, given a header we have just received */
 static int read_payload(int fd, struct df_packet_header *header, char **payload)
 {
+	*payload = calloc(header->payload_size, sizeof(**payload));
+	if (NULL == *payload)
+		return -errno;
 
-	return 0;
+	return df_read(fd, *payload, header->payload_size);
 }
 
 int df_read_message(int fd, struct df_packet_header *header, char **payload)
