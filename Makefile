@@ -40,7 +40,7 @@ SRC += $(CUTILS_SRC)
 
 CC ?= gcc
 OBJ = $(SRC:.c=.o)
-BIN = adbfuse
+BIN = df_host
 CFLAGS += `pkg-config fuse --cflags` -Wall -O0 -g #-Wextra #-Werror
 CFLAGS += -I$(ADB_BASE)/adb/ -I$(ADB_BASE)/include/
 CFLAGS += -DADB_HOST=1
