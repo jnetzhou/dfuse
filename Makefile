@@ -31,6 +31,7 @@ CUTILS_SRC := \
 	load_file.c
 SRC := df_host.c \
        df_protocol.c \
+       df_data_types.c \
        df_io.c
 
 SRC += $(ADB_SRC)
@@ -51,6 +52,8 @@ VPATH := $(ADBFUSE_BASE)/src/
 VPATH += $(VPATH):$(ADB_BASE)/adb
 VPATH += $(VPATH):$(ADB_BASE)/libcutils
 VPATH += $(VPATH):$(ADB_BASE)/libzipfile
+
+TARGET_CC := arm-linux-gnueabi-gcc
 
 all:$(BIN)
 
