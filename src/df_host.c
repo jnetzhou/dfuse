@@ -5,6 +5,10 @@
  *
  * dfuse, or droid fuse : file system in userspace over the adb protocol
  */
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/ip.h>
+
 #include <stdio.h>
 #include <errno.h>
 
@@ -21,11 +25,13 @@
 #include "adb_bridge.h"
 #include "df_protocol.h"
 
+#define DF_SERVER_PORT 6665
+
 /**
  * @var sock
  * @brief socket opened on the device, via which file system request will pass
  */
-/* static int sock; */
+static int sock = -1;
 
 /**
  * TODO
@@ -443,6 +449,11 @@ static struct fuse_operations df_oper = {
 int main(int argc, char *argv[])
 {
 	int ret;
+	uint32_t device_version = 0;
+	struct sockaddr_in addr;
+	struct sockaddr_in cli_addr;
+	socklen_t sock_len = sizeof(cli_addr);
+	int srv_sock;
 
 	/* TODO set up forwarding to device
 	if (!can_talk_to_a_device()) {
@@ -450,6 +461,54 @@ int main(int argc, char *argv[])
 		return EXIT_FAILURE;
 	}
 	*/
+
+	srv_sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (-1 == srv_sock) {
+		perror("socket");
+		return EXIT_FAILURE;
+	}
+
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_addr.s_addr = INADDR_ANY;
+	addr.sin_port = htons(DF_SERVER_PORT);
+
+	ret = bind(srv_sock, (struct sockaddr *) &addr, sock_len);
+	if (-1 == ret) {
+		perror("bind");
+		return EXIT_FAILURE;
+	}
+
+	ret = listen(srv_sock, 1);
+	if (-1 == ret) {
+		perror("listen");
+		return EXIT_FAILURE;
+	}
+
+	sock = accept4(srv_sock, (struct sockaddr *)&cli_addr, &sock_len,
+			SOCK_CLOEXEC);
+	if (-1 == ret) {
+		perror("accept");
+		return EXIT_FAILURE;
+	}
+
+	printf("Client %d is connected\n", ret);
+
+	ret = df_send_handshake(sock, DF_PROTOCOL_VERSION);
+	if (0 > ret)
+		return EXIT_FAILURE;
+
+	ret = df_read_handshake(sock, &device_version);
+	if (0 > ret)
+		return EXIT_FAILURE;
+
+	if (device_version == DF_PROTOCOL_VERSION)
+		printf("protocols do correspond\n");
+	else
+		printf("protocol version mismatch, host : %u, device : %u\n",
+				DF_PROTOCOL_VERSION, device_version);
+
+	return EXIT_SUCCESS;
 
 	ret = fuse_main(argc, argv, &df_oper, NULL);
 
