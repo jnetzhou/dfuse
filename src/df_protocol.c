@@ -308,6 +308,14 @@ out:
 	return ret;
 }
 
+/* converts a header from host order to big endian */
+static void marshall_header(struct df_packet_header *header)
+{
+	header->payload_size = htobe16(header->payload_size);
+	if (header->is_host_packet)
+		header->error = htobe16(header->error);
+}
+
 /* write an entire message, header + payload */
 int df_write_message(int fd, struct df_packet_header *header, char *payload)
 {
@@ -316,7 +324,9 @@ int df_write_message(int fd, struct df_packet_header *header, char *payload)
 	if (0 > fd || NULL == header || NULL == payload)
 		return -EINVAL;
 
+	marshall_header(header);
 	ret = df_write(fd, header, sizeof(*header));
+	unmarshall_header(header);
 	if (0 > ret)
 		return ret;
 
