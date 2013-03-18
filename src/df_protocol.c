@@ -196,7 +196,7 @@ static int append_statvfs(char **payload, size_t *size, struct statvfs *data)
 
 static int append_string(char **payload, size_t *size, char *data)
 {
-	return append_data(payload, size, data, strlen(data));
+	return append_data(payload, size, data, strlen(data) + 1);
 }
 
 static int append_timespec(char **payload, size_t *size, struct timespec *data)
