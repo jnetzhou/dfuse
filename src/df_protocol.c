@@ -10,6 +10,46 @@
 #include "df_io.h"
 #include "df_data_types.h"
 
+static const char * const op_to_str[] = {
+	[DF_OP_INVALID]     = "DF_OP_INVALID = 0",
+	[DF_OP_READDIR]     = "DF_OP_READDIR",
+
+	[DF_OP_GETATTR]     = "DF_OP_GETATTR",
+	[DF_OP_READLINK]    = "DF_OP_READLINK",
+	[DF_OP_MKDIR]       = "DF_OP_MKDIR",
+	[DF_OP_OPEN]        = "DF_OP_OPEN",
+	[DF_OP_RELEASE]     = "DF_OP_RELEASE",
+	[DF_OP_READ]        = "DF_OP_READ",
+	[DF_OP_WRITE]       = "DF_OP_WRITE",
+	[DF_OP_UNLINK]      = "DF_OP_UNLINK",
+	[DF_OP_RMDIR]       = "DF_OP_RMDIR",
+
+	[DF_OP_TRUNCATE]    = "DF_OP_TRUNCATE",
+	[DF_OP_RENAME]      = "DF_OP_RENAME",
+	[DF_OP_CHMOD]       = "DF_OP_CHMOD",
+	[DF_OP_CHOWN]       = "DF_OP_CHOWN",
+	[DF_OP_ACCESS]      = "DF_OP_ACCESS",
+	[DF_OP_SYMLINK]     = "DF_OP_SYMLINK",
+	[DF_OP_LINK]        = "DF_OP_LINK",
+
+	[DF_OP_MKNOD]       = "DF_OP_MKNOD",
+	[DF_OP_UTIMENS]     = "DF_OP_UTIMENS",
+	[DF_OP_STATFS]      = "DF_OP_STATFS",
+	[DF_OP_FSYNC]       = "DF_OP_FSYNC",
+	[DF_OP_FALLOCATE]   = "DF_OP_FALLOCATE",
+	[DF_OP_SETXATTR]    = "DF_OP_SETXATTR",
+	[DF_OP_GETXATTR]    = "DF_OP_GETXATTR",
+	[DF_OP_LISTXATTR]   = "DF_OP_LISTXATTR",
+	[DF_OP_REMOVEXATTR] = "DF_OP_REMOVEXATTR",
+
+	[DF_OP_QUIT]        = "DF_OP_QUIT",
+};
+
+const char *df_op_code_to_str(enum df_op op)
+{
+	return op_to_str[op];
+}
+
 int df_send_handshake(int fd, uint32_t prot_version)
 {
 	ssize_t ret;

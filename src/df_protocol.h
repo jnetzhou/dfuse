@@ -42,6 +42,8 @@ enum df_op {
 	DF_OP_QUIT, /**< send a "bye bye" message */
 };
 
+const char *df_op_code_to_str(enum df_op);
+
 /* packet header, aligned on 64bits */
 struct df_packet_header {
 	/** unique id use in a request's packet match that of answer(s) */
