@@ -46,39 +46,14 @@ const char *df_op_code_to_str(enum df_op);
 
 /* packet header, aligned on 64bits */
 struct df_packet_header {
-	/** unique id use in a request's packet match that of answer(s) */
-	uint8_t request_id;
-	/** id of the paquet for a given request_id */
-	uint8_t part_id;
 	/** size of useful data in the payload part of the packet */
-	uint16_t payload_size;
-
-	union {
-		struct {
-			/** non zero if this paquet terminates the request */
-			uint8_t end_of_request;
-			/** code of the operation requested */
-			uint8_t op_code;
-			/** for header alignment on 64bit */
-			uint16_t zero_padding;
-		} host;
-		struct {
-			/** non zero if this paquet terminates the answer */
-			uint8_t end_of_answer;
-			/** for header alignment on 64bit */
-			uint8_t zero_padding;
-			/** error code i.e. function return value */
-			uint16_t error;
-		} device;
-		struct {
-			/** non-zero if it's the last part of the message */
-			uint8_t end_of_message;
-			/** non-zero if the packet is an host packet */
-			uint8_t is_host_packet;
-			/** for header alignment on 64bit */
-			uint16_t padding;
-		} generic;
-	};
+	uint32_t payload_size;
+	/** code of the operation requested */
+	uint8_t op_code;
+	/** non-zero if the packet is an host packet */
+	uint8_t is_host_packet;
+	/** error code i.e. errno value */
+	uint16_t error;
 };
 
 /* types of data exchanged */

@@ -422,10 +422,9 @@ int action_enosys(int sock, struct df_packet_header *header, char *payload)
 	payload = payload;
 
 	memset(&answer_header, 0, sizeof(answer_header));
-	answer_header.request_id = header->request_id;
-	answer_header.payload_size = header->request_id;
-	answer_header.device.end_of_answer = 1;
-	answer_header.device.error = ENOSYS;
+	answer_header.payload_size = sizeof(answer_payload);
+	answer_header.op_code = header->op_code;
+	answer_header.error = ENOSYS;
 
 	return df_write_message(sock, &answer_header, answer_payload);
 }
@@ -471,7 +470,7 @@ static action_t dispatch_table[] = {
 static int dispatch(int sock, struct df_packet_header *header, char *payload)
 {
 	/* TODO add some checking ? */
-	return dispatch_table[header->host.op_code](sock, header, payload);
+	return dispatch_table[header->op_code](sock, header, payload);
 }
 
 static int event_loop(int sock)
@@ -492,7 +491,7 @@ static int event_loop(int sock)
 		ret = dispatch(sock, &header, payload);
 		if (0 > ret)
 			goto out;
-	} while (header.host.op_code != DF_OP_QUIT);
+	} while (header.op_code != DF_OP_QUIT);
 out:
 
 	return ret;

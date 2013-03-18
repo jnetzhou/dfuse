@@ -80,8 +80,8 @@ int df_read_handshake(int fd, uint32_t *prot_version)
 static void unmarshall_header(struct df_packet_header *header)
 {
 	header->payload_size = be16toh(header->payload_size);
-	if (header->generic.is_host_packet)
-		header->device.error = be16toh(header->device.error);
+	if (header->is_host_packet)
+		header->error = be16toh(header->error);
 }
 
 /* reads a message header */
