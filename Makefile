@@ -47,6 +47,7 @@ CFLAGS += -DADB_HOST=1
 CFLAGS += -D_XOPEN_SOURCE -D_GNU_SOURCE
 CFLAGS += -DHAVE_FORKEXEC -DHAVE_TERMIO_H
 LDFLAGS += `pkg-config fuse --libs` -pthread -lrt -lncurses -lpthread -lcrypto
+LDFLAGS += -rdynamic
 
 VPATH := $(ADBFUSE_BASE)/src/
 VPATH += $(VPATH):$(ADB_BASE)/adb
