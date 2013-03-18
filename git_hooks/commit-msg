@@ -16,6 +16,7 @@ def build_regex():
 	r_tag = r_bugfix + r_or + \
 		r"BUILD" + r_or + \
 		r_coverity + r_or + \
+		r"DEBUG" + r_or + \
 		r"DEV" + r_or + \
 		r"DEVMINOR" + r_or + \
 		r"DEVMAJOR" + r_or + \
@@ -30,15 +31,18 @@ def commit_format_error():
 summary, then an optional detailed message separated by an empty line.""")
 	exit(1)
 
-# TODO update according to regex
 def commit_summary_error():
 	print("[ERROR] Invalide message format");
 	print("""Valid commit message format is :
                 [TYPE_OF_COMMIT] commit message
                 where TYPE_OF_COMMIT is one of :
+                        BUGFIX [id_list]
+                        BUILD
+                        COVERITY [id_list]
+                        DEV
+                        DEBUG
                         DEVMAJOR
                         DEVMINOR
-                        DEV
                         DOC
                         BUILD
                 and the total length is under 80 characters""")
