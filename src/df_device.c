@@ -41,6 +41,8 @@
 
 #define DF_DEVICE_PORT 6666
 
+static int dbg;
+
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
 	int res;
@@ -490,6 +492,11 @@ static int event_loop(int sock)
 		ret = df_read_message(sock, &header, &payload);
 		if (0 > ret)
 			goto out;
+
+		if (dbg)
+			fprintf(stderr, "received op code %d (%s)\n",
+					header.op_code,
+					df_op_code_to_str(header.op_code));
 
 		ret = dispatch(sock, &header, payload);
 		FREE(payload);
