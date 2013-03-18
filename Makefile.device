@@ -19,7 +19,7 @@ all:$(BIN)
 
 VPATH := $(DFUSE_BASE)/src/
 
-$(BIN):$(SRC)
+$(BIN):$(OBJ)
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
 
 mrproper:
