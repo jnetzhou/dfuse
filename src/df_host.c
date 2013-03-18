@@ -455,6 +455,7 @@ int main(int argc, char *argv[])
 	struct sockaddr_in cli_addr;
 	socklen_t addr_len = sizeof(addr);
 	int srv_sock;
+	int optval = 1;
 
 	/* TODO set up forwarding to device
 	if (!can_talk_to_a_device()) {
@@ -466,6 +467,13 @@ int main(int argc, char *argv[])
 	srv_sock = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (-1 == srv_sock) {
 		perror("socket");
+		return EXIT_FAILURE;
+	}
+
+	ret = setsockopt(srv_sock, SOL_SOCKET, SO_REUSEADDR, &optval,
+			sizeof(optval));
+	if (0 > ret) {
+		perror("setsockopt");
 		return EXIT_FAILURE;
 	}
 
@@ -513,6 +521,8 @@ int main(int argc, char *argv[])
 				DF_PROTOCOL_VERSION, device_version);
 		return EXIT_FAILURE;
 	}
+
+	printf("File system initialization\n");
 
 	return fuse_main(argc, argv, &df_oper, NULL);
 }
