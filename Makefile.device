@@ -8,8 +8,10 @@ SRC := df_io.c \
        df_data_types.c\
        df_protocol.c
 
-CFLAGS += `pkg-config fuse --cflags` -Wall -O0 -g -Wextra -Werror
-CFLAGS += -D_GNU_SOURCE -static
+CFLAGS += `pkg-config fuse --cflags`
+CFLAGS += -O0 -g -Wall -Wextra -Werror
+CFLAGS += -D_GNU_SOURCE
+#CFLAGS += -static
 
 OBJ = $(SRC:.c=.o)
 all:$(BIN)
