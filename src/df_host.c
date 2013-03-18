@@ -493,12 +493,12 @@ int main(int argc, char *argv[])
 	memset(&cli_addr, 0, addr_len);
 	sock = accept4(srv_sock, (struct sockaddr *)&cli_addr, &addr_len,
 			SOCK_CLOEXEC);
-	if (-1 == ret) {
+	if (-1 == sock) {
 		perror("accept");
 		return EXIT_FAILURE;
 	}
 
-	printf("Client %d is connected\n", ret);
+	printf("Client %d is connected\n", sock);
 
 	ret = df_send_handshake(sock, DF_PROTOCOL_VERSION);
 	if (0 > ret)
