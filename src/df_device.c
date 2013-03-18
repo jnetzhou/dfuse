@@ -473,6 +473,11 @@ static int dispatch(int sock, struct df_packet_header *header, char *payload)
 	return dispatch_table[header->op_code](sock, header, payload);
 }
 
+#define FREE(p) do { \
+	free(p); \
+	(p) = NULL; \
+} while (0)
+
 static int event_loop(int sock)
 {
 	int ret;
@@ -486,9 +491,8 @@ static int event_loop(int sock)
 		if (0 > ret)
 			goto out;
 
-		free(payload);
-		payload = NULL;
 		ret = dispatch(sock, &header, payload);
+		FREE(payload);
 		if (0 > ret)
 			goto out;
 	} while (header.op_code != DF_OP_QUIT);
