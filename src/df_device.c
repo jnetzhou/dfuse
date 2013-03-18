@@ -477,7 +477,7 @@ static int event_loop(int sock)
 {
 	int ret;
 	struct df_packet_header header;
-	char *payload;
+	char *payload = NULL;
 
 	do {
 		memset(&header, 0, sizeof(header));
