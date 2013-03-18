@@ -1,4 +1,5 @@
-CC := arm-linux-gnueabi-gcc
+#CC := arm-linux-gnueabi-gcc
+CC := gcc
 
 DFUSE_BASE := /home/nicolas/workspace/C/adbfuse/
 BIN := df_device
