@@ -194,11 +194,6 @@ static int append_statvfs(char **payload, size_t *size, struct statvfs *data)
 			MARSHALLED_STATVFS_SIZE);
 }
 
-static int append_string(char **payload, size_t *size, char *data)
-{
-	return append_data(payload, size, data, strlen(data) + 1);
-}
-
 static int append_timespec(char **payload, size_t *size, struct timespec *data)
 {
 	int64_t marshalled_timespec[MARSHALLED_TIMESPEC_FIELDS];
@@ -215,7 +210,7 @@ int df_build_payload(char **payload, size_t *size, ...)
 	va_list args;
 	enum df_data_type data_type;
 	int loop = 1;
-	int ret = 1;
+	int ret = 0;
 
 	/* data types */
 	void *buffer_data;
@@ -224,7 +219,6 @@ int df_build_payload(char **payload, size_t *size, ...)
 	int64_t int_data;
 	struct stat stat_data;
 	struct statvfs statvfs_data;
-	char *string_data;
 	struct timespec timespec_data;
 
 	if (NULL == payload || NULL != *payload || NULL == size)
@@ -277,12 +271,6 @@ int df_build_payload(char **payload, size_t *size, ...)
 				goto out;
 			break;
 
-		case DF_DATA_STRING:
-			string_data = va_arg(args, char *);
-			ret = append_string(payload, size, string_data);
-			if (0 > ret)
-				goto out;
-			break;
 
 		case DF_DATA_TIMESPEC:
 			timespec_data = va_arg(args, struct timespec);
@@ -290,10 +278,6 @@ int df_build_payload(char **payload, size_t *size, ...)
 			if (0 > ret)
 				goto out;
 			break;
-
-		case DF_DATA_STRING_LIST:
-			ret = -EINVAL;
-			goto out;
 
 		case DF_DATA_END:
 			loop = 0;
