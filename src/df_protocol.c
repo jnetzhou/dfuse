@@ -147,7 +147,7 @@ static int append_data(char **payload, size_t *size, void *marshalled_data,
 {
 	int ret;
 
-	ret = adjust_payload(payload, size, MARSHALLED_FFI_SIZE);
+	ret = adjust_payload(payload, size, marshalled_data_size);
 	if (0 > ret)
 		return ret;
 
