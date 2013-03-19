@@ -75,8 +75,20 @@ int df_read_handshake(int fd, uint32_t *prot_version);
 int df_read_message(int fd, struct df_packet_header *header, char **payload);
 
 /**
+ * parses the payload content, storing values according to the
+ * (df_data_type, lvalue_pointer) passed as an argument list
+ * @param payload Payload to parse
+ * @param offset Points to a value, initially equal to zero, updated in each
+ * call of df_parse_payload. When all has been parsed, it should be equal to
+ * size
+ * @param size Total size of the payload
+ * @return errno-compatible negative value on error, otherwise 0
+ */
+int df_parse_payload(char *payload, size_t *offset, size_t size, ...);
+
+/**
  * builds a payload, given a list of arguments, (df_data_type, value) pairs,
- * ended by a DF_DATA_INVALID, if payload is NULL, it is allocated, if not, new
+ * ended by a DF_DATA_END, if payload is NULL, it is allocated, if not, new
  * data is appended, with payload being potentially reallocated
  */
 int df_build_payload(char **payload, size_t *size, ...);

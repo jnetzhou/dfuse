@@ -204,6 +204,238 @@ static int append_timespec(char **payload, size_t *size, struct timespec *data)
 			MARSHALLED_TIMESPEC_SIZE);
 }
 
+static int pop_data(char *payload, size_t *offset, size_t size, void *data,
+		size_t data_size)
+{
+	if (NULL == data || 0 == data_size)
+		return -EINVAL;
+	if ((size - *offset) > data_size)
+		return -EINVAL;
+
+	memcpy(data, payload + *offset, data_size);
+	*offset += data_size;
+
+	return 0;
+}
+
+static int pop_int(char *payload, size_t *offset, size_t size,
+		int64_t *int_data)
+{
+	int ret;
+
+	ret = pop_data(payload, offset, size, int_data, sizeof(*int_data));
+	if (0 > ret)
+		return ret;
+
+	*int_data = be64toh(*int_data);
+
+	return 0;
+}
+
+static int pop_data_type(char *payload, size_t *offset, size_t size,
+		enum df_data_type *data_type)
+{
+	int ret;
+	int64_t marshalled_data_type;
+
+	ret = pop_int(payload, offset, size, &marshalled_data_type);
+	if (0 > ret)
+		return ret;
+
+	/* no endianness conversion : already done */
+	*data_type = marshalled_data_type;
+
+	return 0;
+}
+
+static int pop_buffer(char *payload, size_t *offset, size_t size,
+		void **buffer_data, int64_t buffer_size)
+{
+	if (NULL == buffer_data || NULL != buffer_data)
+		return -EINVAL;
+
+	*buffer_data = malloc(buffer_size);
+	if (NULL == buffer_data)
+		return -errno;
+
+	return pop_data(payload, offset, size, buffer_data, buffer_size);
+}
+
+static int pop_ffi(char *payload, size_t *offset, size_t size,
+		struct fuse_file_info *ffi_data)
+{
+	int ret;
+	int64_t marshalled_ffi[MARSHALLED_FFI_FIELDS];
+
+	if (NULL == ffi_data)
+		return -EINVAL;
+
+	ret = pop_data(payload, offset, size, marshalled_ffi,
+			MARSHALLED_FFI_SIZE);
+	if (0 > ret)
+		return ret;
+
+	unmarshall_fuse_file_info(ffi_data, marshalled_ffi);
+
+	return 0;
+}
+
+static int pop_stat(char *payload, size_t *offset, size_t size,
+		struct stat *stat_data)
+{
+	int ret;
+	int64_t marshalled_stat[MARSHALLED_STAT_FIELDS];
+
+	if (NULL == stat_data)
+		return -EINVAL;
+
+	ret = pop_data(payload, offset, size, marshalled_stat,
+			MARSHALLED_STAT_SIZE);
+	if (0 > ret)
+		return ret;
+
+	unmarshall_stat(stat_data, marshalled_stat);
+
+	return 0;
+}
+
+static int pop_statvfs(char *payload, size_t *offset, size_t size,
+		struct statvfs *statvfs_data)
+{
+	int ret;
+	int64_t marshalled_statvfs[MARSHALLED_STATVFS_FIELDS];
+
+	if (NULL == statvfs_data)
+		return -EINVAL;
+
+	ret = pop_data(payload, offset, size, marshalled_statvfs,
+			MARSHALLED_STATVFS_SIZE);
+	if (0 > ret)
+		return ret;
+
+	unmarshall_statvfs(statvfs_data, marshalled_statvfs);
+
+	return 0;
+}
+
+static int pop_timespec(char *payload, size_t *offset, size_t size,
+		struct timespec *timespec_data)
+{
+	int ret;
+	int64_t marshalled_timespec[MARSHALLED_TIMESPEC_FIELDS];
+
+	if (NULL == timespec_data)
+		return -EINVAL;
+
+	ret = pop_data(payload, offset, size, marshalled_timespec,
+			MARSHALLED_TIMESPEC_SIZE);
+	if (0 > ret)
+		return ret;
+
+	unmarshall_timespec(timespec_data, marshalled_timespec);
+
+	return 0;
+}
+
+int df_parse_payload(char *payload, size_t *offset, size_t size, ...)
+{
+	va_list args;
+	enum df_data_type requested_data_type;
+	enum df_data_type data_type;
+	int loop = 1;
+	int ret = 0;
+
+	void **buffer_data;
+	struct fuse_file_info *ffi_data;
+	int64_t *int_data;
+	struct stat *stat_data;
+	struct statvfs *statvfs_data;
+	struct timespec *timespec_data;
+
+#define POP_DATA_POINTER(p) (p = va_arg(args, typeof(p)))
+	if (NULL == payload || NULL == offset)
+		return -EINVAL;
+
+	va_start(args, size);
+	do {
+		requested_data_type = va_arg(args, enum df_data_type);
+		if (DF_DATA_END == data_type)
+			break;
+
+		ret = pop_data_type(payload, offset, size, &data_type);
+		if (0 > ret)
+			goto out;
+
+		if (data_type != requested_data_type) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		switch (data_type) {
+		case DF_DATA_BUFFER:
+			/* get buffer size */
+			POP_DATA_POINTER(int_data);
+			ret = pop_int(payload, offset, size, int_data);
+			if (0 > ret)
+				goto out;
+			/* get buffer data */
+			POP_DATA_POINTER(buffer_data);
+			ret = pop_buffer(payload, offset, size, buffer_data,
+					*int_data /* buffer size */
+					);
+			if (0 > ret)
+				goto out;
+			break;
+
+		case DF_DATA_FUSE_FILE_INFO:
+			POP_DATA_POINTER(ffi_data);
+			ret = pop_ffi(payload, offset, size, ffi_data);
+			if (0 > ret)
+				goto out;
+			break;
+
+		case DF_DATA_INT:
+			POP_DATA_POINTER(int_data);
+			ret = pop_int(payload, offset, size, int_data);
+			if (0 > ret)
+				goto out;
+			break;
+
+		case DF_DATA_STAT:
+			POP_DATA_POINTER(stat_data);
+			ret = pop_stat(payload, offset, size, stat_data);
+			if (0 > ret)
+				goto out;
+			break;
+
+		case DF_DATA_STATVFS:
+			POP_DATA_POINTER(statvfs_data);
+			ret = pop_statvfs(payload, offset, size, statvfs_data);
+			if (0 > ret)
+				goto out;
+			break;
+
+		case DF_DATA_TIMESPEC:
+			POP_DATA_POINTER(timespec_data);
+			ret = pop_timespec(payload, offset, size,
+					timespec_data);
+			if (0 > ret)
+				goto out;
+			break;
+
+		case DF_DATA_END:
+			loop = 0;
+			ret = 0;
+			break;
+		}
+	} while (loop);
+#undef POP_DATA_POINTER
+
+out:
+	va_end(args);
+
+	return ret;
+}
 
 int df_build_payload(char **payload, size_t *size, ...)
 {
