@@ -235,8 +235,12 @@ int df_build_payload(char **payload, size_t *size, ...)
 
 		switch (data_type) {
 		case DF_DATA_BUFFER:
-			buffer_data = va_arg(args, void *);
 			buffer_size = va_arg(args, size_t);
+			buffer_data = va_arg(args, void *);
+			int_data = buffer_size;
+			ret = append_int(payload, size, int_data);
+			if (0 > ret)
+				goto out;
 			ret = append_data(payload, size, buffer_data,
 					buffer_size);
 			if (0 > ret)
@@ -270,7 +274,6 @@ int df_build_payload(char **payload, size_t *size, ...)
 			if (0 > ret)
 				goto out;
 			break;
-
 
 		case DF_DATA_TIMESPEC:
 			timespec_data = va_arg(args, struct timespec);
