@@ -209,7 +209,7 @@ static int pop_data(char *payload, size_t *offset, size_t size, void *data,
 {
 	if (NULL == data || 0 == data_size)
 		return -EINVAL;
-	if ((size - *offset) > data_size)
+	if ((size - *offset) < data_size)
 		return -EINVAL;
 
 	memcpy(data, payload + *offset, data_size);
