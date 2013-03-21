@@ -80,53 +80,58 @@ static int df_chown(const char *path, uid_t uid, gid_t gid)
 	return -ENOSYS;
 }
 
-/**
- * TODO
- * example implementation uses lstat
- * from man 2 lstat :
- *   "stat, fstat, lstat - get file status"
- * @param path
- * @param stbuf
- * @return
- */
+#define FREE(p) do { \
+	free(p); \
+	(p) = NULL; \
+} while (0) \
+
+static void char_array_free(char **array)
+{
+	FREE(*array);
+}
+
 static int df_getattr(const char *path, struct stat *stbuf)
 {
 	int ret;
-	int len;
-	int syncfd;
-	syncmsg msg;
+	char __attribute__ ((cleanup(char_array_free)))*payload = NULL;
+	size_t size;
+	struct df_packet_header header = {
+		.op_code = DF_OP_GETATTR,
+		.is_host_packet = 1,
+		.error = 0,
+	};
+	struct stat st;
+	size_t offset = 0;
 
-	syncfd = adb_connect("sync:");
-	if (0 > syncfd) {
-		fprintf(stderr, "sync error: %s\n", adb_error());
-		return -EIO;
+	ret = df_build_payload(&payload, &size,
+			DF_DATA_BUFFER, strlen(path) + 1, path,
+			DF_DATA_END);
+	if (0 > ret)
+		return ret;
+	header.payload_size = size;
+
+	ret = df_write_message(sock, &header, payload);
+	if (0 > ret)
+		return ret;
+
+	FREE(payload);
+	ret = df_read_message(sock, &header, &payload);
+	if (0 > ret)
+		return ret;
+	if (0 != header.error) {
+		fprintf(stderr, " *** %d %s, %s\n", header.error, payload,
+				strerror(header.error));
+		return -header.error;
 	}
 
-	len = strlen(path);
+	printf("%u, %u, %u, %u\n",  header .op_code, header.is_host_packet,
+			header.error, header.payload_size);
 
-	msg.req.id = ID_STAT;
-	msg.req.namelen = htoll(len);
-	ret = writex(syncfd, &msg.req, sizeof(msg.req));
-	if (0 > ret)
-		return -errno;
-	ret = writex(syncfd, path, len);
-	if (0 > ret)
-		return -errno;
+	ret = df_parse_payload(payload, &offset, header.payload_size,
+			DF_DATA_STAT, &st,
+			DF_DATA_END);
 
-	ret = readx(syncfd, &msg.stat, sizeof(msg.stat));
-	if (0 > ret)
-		return -errno;
-
-	if (msg.stat.id != ID_STAT)
-		return -EIO;
-
-	stbuf->st_mode = msg.stat.mode;
-	stbuf->st_size = msg.stat.size;
-	stbuf->st_mtime = msg.stat.time;
-
-	sync_quit(syncfd);
-
-	return 0;
+	return ret;
 }
 
 /**
