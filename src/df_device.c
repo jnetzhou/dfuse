@@ -56,15 +56,56 @@ static int errno_reply(int sock, enum df_op op_code, int err)
 	return df_write_message(sock, &answer_header, answer_payload);
 }
 
-static int xmp_getattr(const char *path, struct stat *stbuf)
+static int action_getattr(int sock, struct df_packet_header *header,
+		char *payload)
 {
-	int res;
+	int ret;
+	struct df_packet_header answer_header;
+	char *answer_payload = NULL;
+	size_t offset = 0;
+	char *path = NULL;
+	struct stat st;
+	size_t size = 0;
+	int64_t path_len;
+	int ipath_len;
+	enum df_op op_code = DF_OP_GETATTR;
 
-	res = lstat(path, stbuf);
-	if (res == -1)
-		return -errno;
+	/* retrieve the arguments */
+	ret = df_parse_payload(payload, &offset, header->payload_size,
+			DF_DATA_BUFFER, &path_len, &path,
+			DF_DATA_END);
+	if (0 > ret)
+		return errno_reply(sock, op_code, -ret);
+	if (path[path_len - 1] != '\0')
+		return errno_reply(sock, op_code, -ret);
 
-	return 0;
+	if (dbg) {
+		fprintf(stderr, "offset   = %u\n", offset);
+		ipath_len = path_len;
+		fprintf(stderr, "path_len = %d\n", ipath_len);
+		fprintf(stderr, "path     = %.*s\n", ipath_len, path);
+	}
+
+	/* perform the syscall */
+	ret = lstat(path, &st);
+	if (ret == -1)
+		return errno_reply(sock, op_code, errno);
+
+	/* build the answer */
+	ret = df_build_payload(&answer_payload, &size,
+			DF_DATA_STAT, &st,
+			DF_DATA_END);
+	if (0 > ret)
+		return errno_reply(sock, op_code, -ret);
+	memset(&answer_header, 0, sizeof(answer_header));
+	answer_header.payload_size = size;
+	answer_header.op_code = op_code;
+	answer_header.error = 0;
+
+	/* send the answer */
+	ret = df_write_message(sock, &answer_header, answer_payload);
+
+	return ret;
 }
 
 static int xmp_access(const char *path, int mask)
@@ -394,7 +435,6 @@ static int xmp_removexattr(const char *path, const char *name)
 #endif /* HAVE_SETXATTR */
 
 static struct fuse_operations xmp_oper = {
-	.getattr	= xmp_getattr,
 	.access		= xmp_access,
 	.readlink	= xmp_readlink,
 	.readdir	= xmp_readdir,
@@ -439,9 +479,9 @@ typedef int (*action_t)(int sock, struct df_packet_header *header,
 
 static action_t dispatch_table[] = {
 	[DF_OP_INVALID] = action_enosys,
-	[DF_OP_READDIR] = action_enosys,
 
-	[DF_OP_GETATTR] = action_enosys,
+	[DF_OP_READDIR] = action_enosys,
+	[DF_OP_GETATTR] = action_getattr,
 	[DF_OP_READLINK] = action_enosys,
 	[DF_OP_MKDIR] = action_enosys,
 	[DF_OP_OPEN] = action_enosys,
