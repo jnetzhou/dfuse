@@ -251,14 +251,14 @@ static int pop_data_type(char *payload, size_t *offset, size_t size,
 static int pop_buffer(char *payload, size_t *offset, size_t size,
 		void **buffer_data, int64_t buffer_size)
 {
-	if (NULL == buffer_data || NULL != buffer_data)
+	if (NULL == buffer_data || NULL != *buffer_data)
 		return -EINVAL;
 
 	*buffer_data = malloc(buffer_size);
 	if (NULL == buffer_data)
 		return -errno;
 
-	return pop_data(payload, offset, size, buffer_data, buffer_size);
+	return pop_data(payload, offset, size, *buffer_data, buffer_size);
 }
 
 static int pop_ffi(char *payload, size_t *offset, size_t size,
