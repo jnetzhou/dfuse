@@ -43,6 +43,19 @@
 
 static int dbg;
 
+static int errno_reply(int sock, enum df_op op_code, int err)
+{
+	struct df_packet_header answer_header;
+	char *answer_payload = strerror(err);
+
+	memset(&answer_header, 0, sizeof(answer_header));
+	answer_header.payload_size = strlen(answer_payload) + 1;
+	answer_header.op_code = op_code;
+	answer_header.error = err;
+
+	return df_write_message(sock, &answer_header, answer_payload);
+}
+
 static int xmp_getattr(const char *path, struct stat *stbuf)
 {
 	int res;
@@ -415,20 +428,10 @@ static struct fuse_operations xmp_oper = {
 #endif
 };
 
-int action_enosys(int sock, struct df_packet_header *header, char *payload)
+int action_enosys(int sock, struct df_packet_header *header,
+		char __attribute__((unused)) *payload)
 {
-	struct df_packet_header answer_header;
-	char answer_payload[] = "ENOSYS";
-
-	/** TODO gcc warning */
-	payload = payload;
-
-	memset(&answer_header, 0, sizeof(answer_header));
-	answer_header.payload_size = sizeof(answer_payload);
-	answer_header.op_code = header->op_code;
-	answer_header.error = ENOSYS;
-
-	return df_write_message(sock, &answer_header, answer_payload);
+	return errno_reply(sock, header->op_code, ENOSYS);
 }
 
 typedef int (*action_t)(int sock, struct df_packet_header *header,
