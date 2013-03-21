@@ -447,11 +447,11 @@ int df_build_payload(char **payload, size_t *size, ...)
 	/* data types */
 	void *buffer_data;
 	size_t buffer_size;
-	struct fuse_file_info ffi_data;
+	struct fuse_file_info *ffi_data;
 	int64_t int_data;
-	struct stat stat_data;
-	struct statvfs statvfs_data;
-	struct timespec timespec_data;
+	struct stat *stat_data;
+	struct statvfs *statvfs_data;
+	struct timespec *timespec_data;
 
 	if (NULL == payload || NULL != *payload || NULL == size)
 		return -EINVAL;
@@ -480,8 +480,8 @@ int df_build_payload(char **payload, size_t *size, ...)
 			break;
 
 		case DF_DATA_FUSE_FILE_INFO:
-			ffi_data = va_arg(args, struct fuse_file_info);
-			ret = append_fuse_file_info(payload, size, &ffi_data);
+			ffi_data = va_arg(args, struct fuse_file_info *);
+			ret = append_fuse_file_info(payload, size, ffi_data);
 			if (0 > ret)
 				goto out;
 			break;
@@ -494,22 +494,22 @@ int df_build_payload(char **payload, size_t *size, ...)
 			break;
 
 		case DF_DATA_STAT:
-			stat_data = va_arg(args, struct stat);
-			ret = append_stat(payload, size, &stat_data);
+			stat_data = va_arg(args, struct stat *);
+			ret = append_stat(payload, size, stat_data);
 			if (0 > ret)
 				goto out;
 			break;
 
 		case DF_DATA_STATVFS:
-			statvfs_data = va_arg(args, struct statvfs);
-			ret = append_statvfs(payload, size, &statvfs_data);
+			statvfs_data = va_arg(args, struct statvfs *);
+			ret = append_statvfs(payload, size, statvfs_data);
 			if (0 > ret)
 				goto out;
 			break;
 
 		case DF_DATA_TIMESPEC:
-			timespec_data = va_arg(args, struct timespec);
-			ret = append_timespec(payload, size, &timespec_data);
+			timespec_data = va_arg(args, struct timespec *);
+			ret = append_timespec(payload, size, timespec_data);
 			if (0 > ret)
 				goto out;
 			break;
