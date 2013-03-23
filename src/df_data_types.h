@@ -19,10 +19,14 @@ void marshall_fuse_file_info(struct fuse_file_info *ffi,
 		int64_t *marshalled_ffi);
 void unmarshall_fuse_file_info(struct fuse_file_info *ffi,
 		int64_t *marshalled_ffi);
+
+void dump_stat(struct stat *st);
 void marshall_stat(struct stat *st, int64_t *marshalled_stat);
 void unmarshall_stat(struct stat *st, int64_t *marshalled_stat);
+
 void marshall_statvfs(struct statvfs *stv, int64_t *marshalled_statvfs);
 void unmarshall_statvfs(struct statvfs *stv, int64_t *marshalled_statvfs);
+
 void marshall_timespec(struct timespec *ts, int64_t *marshalled_timespec);
 void unmarshall_timespec(struct timespec *ts, int64_t *marshalled_timespec);
 

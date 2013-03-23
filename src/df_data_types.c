@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <inttypes.h>
 #include <endian.h>
 
@@ -60,6 +61,23 @@ void unmarshall_fuse_file_info(struct fuse_file_info *ffi,
 	ffi->padding = marshalled_ffi[3];
 	ffi->fh = marshalled_ffi[4];
 	ffi->lock_owner = marshalled_ffi[5];
+}
+
+void dump_stat(struct stat *st)
+{
+	fprintf(stderr, "st->st_dev     = %llu\n", st->st_dev);
+	fprintf(stderr, "st->st_ino     = %llu\n", st->st_ino);
+	fprintf(stderr, "st->st_mode    = %d\n", st->st_mode);
+	fprintf(stderr, "st->st_nlink   = %d\n", st->st_nlink);
+	fprintf(stderr, "st->st_uid     = %d\n", st->st_uid);
+	fprintf(stderr, "st->st_gid     = %d\n", st->st_gid);
+	fprintf(stderr, "st->st_rdev    = %llu\n", st->st_rdev);
+	fprintf(stderr, "st->st_size    = %llu\n", st->st_size);
+	fprintf(stderr, "st->st_blksize = %lu\n", st->st_blksize);
+	fprintf(stderr, "st->st_blocks  = %llu\n", st->st_blocks);
+	fprintf(stderr, "st->st_atime   = %lu\n", st->st_atime);
+	fprintf(stderr, "st->st_mtime   = %lu\n", st->st_mtime);
+	fprintf(stderr, "st->st_ctime   = %lu\n", st->st_ctime);
 }
 
 void marshall_stat(struct stat *st, int64_t *marshalled_stat)
