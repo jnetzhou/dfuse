@@ -529,7 +529,7 @@ int df_build_payload(char **payload, size_t *size, ...)
 	struct statvfs *statvfs_data;
 	struct timespec *timespec_data;
 
-	if (NULL == payload || NULL != *payload || NULL == size)
+	if (NULL == payload || NULL == size)
 		return -EINVAL;
 	*size = 0;
 
