@@ -60,6 +60,8 @@ struct df_packet_header {
 enum df_data_type {
 	DF_DATA_END = 0,
 
+	DF_DATA_BLOCK_END,
+
 	DF_DATA_BUFFER,
 	DF_DATA_FUSE_FILE_INFO,
 	DF_DATA_INT,

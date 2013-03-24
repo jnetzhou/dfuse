@@ -368,7 +368,7 @@ int df_parse_payload(char *payload, size_t *offset, size_t size, ...)
 		 * readdir, it's not necessary that all has been read after one
 		 * call
 		 */
-		if (DF_DATA_END == requested_data_type)
+		if (DF_DATA_BLOCK_END == requested_data_type)
 			break;
 
 		ret = pop_data_type(payload, offset, size, &data_type);
@@ -436,6 +436,10 @@ int df_parse_payload(char *payload, size_t *offset, size_t size, ...)
 			loop = 0;
 			ret = 0;
 			break;
+
+		case DF_DATA_BLOCK_END:
+			/* never reached */
+			break;
 		}
 	} while (loop);
 #undef POP_DATA_POINTER
@@ -469,6 +473,9 @@ int df_build_payload(char **payload, size_t *size, ...)
 	va_start(args, size);
 	do {
 		data_type = va_arg(args, enum df_data_type);
+		if (DF_DATA_BLOCK_END == data_type)
+			break;
+
 		/* prefix each datum by it's type */
 		ret = append_int(payload, size, data_type);
 		if (0 > ret)
@@ -526,6 +533,10 @@ int df_build_payload(char **payload, size_t *size, ...)
 		case DF_DATA_END:
 			loop = 0;
 			ret = 0;
+			break;
+
+		case DF_DATA_BLOCK_END:
+			/* never reached */
 			break;
 		}
 	} while (loop);
