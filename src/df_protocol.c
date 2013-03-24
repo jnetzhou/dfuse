@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
 #include <errno.h>
@@ -45,9 +46,27 @@ static const char * const op_to_str[] = {
 	[DF_OP_QUIT]        = "DF_OP_QUIT",
 };
 
+static const char const *type_to_str[] = {
+	[DF_DATA_END]            = "DF_DATA_END",
+
+	[DF_DATA_BLOCK_END]      = "DF_DATA_BLOCK_END",
+
+	[DF_DATA_BUFFER]         = "DF_DATA_BUFFER",
+	[DF_DATA_FUSE_FILE_INFO] = "DF_DATA_FUSE_FILE_INFO",
+	[DF_DATA_INT]            = "DF_DATA_INT",
+	[DF_DATA_STAT]           = "DF_DATA_STAT",
+	[DF_DATA_STATVFS]        = "DF_DATA_STATVFS",
+	[DF_DATA_TIMESPEC]       = "DF_DATA_TIMESPEC",
+};
+
 const char *df_op_code_to_str(enum df_op op)
 {
 	return op_to_str[op];
+}
+
+static const char *df_data_type_to_str(enum df_data_type type)
+{
+	return type_to_str[type];
 }
 
 int df_send_handshake(int fd, uint32_t prot_version)
