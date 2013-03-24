@@ -531,7 +531,6 @@ int df_build_payload(char **payload, size_t *size, ...)
 
 	if (NULL == payload || NULL == size)
 		return -EINVAL;
-	*size = 0;
 
 	va_start(args, size);
 	do {
