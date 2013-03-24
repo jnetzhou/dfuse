@@ -12,8 +12,10 @@
 #include "df_io.h"
 #include "df_data_types.h"
 
+static int dbg;
+
 static const char * const op_to_str[] = {
-	[DF_OP_INVALID]     = "DF_OP_INVALID = 0",
+	[DF_OP_INVALID]     = "DF_OP_INVALID",
 	[DF_OP_READDIR]     = "DF_OP_READDIR",
 
 	[DF_OP_GETATTR]     = "DF_OP_GETATTR",
@@ -185,6 +187,11 @@ int df_read_message(int fd, struct df_packet_header *header, char **payload)
 	ret = read_payload(fd, header, payload);
 	if (0 > ret)
 		return ret;
+
+	if (dbg) {
+		dump_header(header, 1);
+		dump_payload(*payload, header->payload_size, 1);
+	}
 
 	return 0;
 }
@@ -437,6 +444,9 @@ int df_parse_payload(char *payload, size_t *offset, size_t size, ...)
 		ret = pop_data_type(payload, offset, size, &data_type);
 		if (0 > ret)
 			goto out;
+		if (dbg)
+			fprintf(stderr, "Parsed %s\n",
+					df_data_type_to_str(data_type));
 
 		if (data_type != requested_data_type) {
 			ret = -EINVAL;
@@ -542,6 +552,9 @@ int df_build_payload(char **payload, size_t *size, ...)
 		ret = append_int(payload, size, data_type);
 		if (0 > ret)
 			goto out;
+		if (dbg)
+			fprintf(stderr, "Append %s\n",
+					df_data_type_to_str(data_type));
 
 		switch (data_type) {
 		case DF_DATA_BUFFER:
@@ -631,5 +644,12 @@ int df_write_message(int fd, struct df_packet_header *header, char *payload)
 	if (0 > ret)
 		return ret;
 
-	return df_write(fd, payload, header->payload_size);
+	ret = df_write(fd, payload, header->payload_size);
+
+	if (dbg) {
+		dump_header(header, 0);
+		dump_payload(payload, header->payload_size, 0);
+	}
+
+	return ret;
 }
