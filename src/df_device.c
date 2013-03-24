@@ -27,6 +27,7 @@
 #include <fuse.h>
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -38,10 +39,23 @@
 #endif
 
 #include "df_protocol.h"
+#include "df_data_types.h"
 
 #define DF_DEVICE_PORT 6666
 
 static int dbg;
+
+#define FREE(p) do { \
+	if (p) {\
+		free(p); \
+		(p) = NULL; \
+	} \
+} while (0)
+
+static void char_array_free(char **array)
+{
+	FREE(*array);
+}
 
 static int errno_reply(int sock, enum df_op op_code, int err)
 {
@@ -61,9 +75,9 @@ static int action_getattr(int sock, struct df_packet_header *header,
 {
 	int ret;
 	struct df_packet_header answer_header;
-	char *answer_payload = NULL;
+	char __attribute__ ((cleanup(char_array_free))) *answer_payload = NULL;
 	size_t offset = 0;
-	char *path = NULL;
+	char __attribute__ ((cleanup(char_array_free))) *path = NULL;
 	struct stat st;
 	size_t size = 0;
 	int64_t path_len;
@@ -84,12 +98,17 @@ static int action_getattr(int sock, struct df_packet_header *header,
 		ipath_len = path_len;
 		fprintf(stderr, "path_len = %d\n", ipath_len);
 		fprintf(stderr, "path     = %.*s\n", ipath_len, path);
+		fprintf(stderr, "action %s %s\n", df_op_code_to_str(op_code),
+				path);
 	}
 
 	/* perform the syscall */
 	ret = lstat(path, &st);
 	if (ret == -1)
 		return errno_reply(sock, op_code, errno);
+
+	if (dbg)
+		dump_stat(&st);
 
 	/* build the answer */
 	ret = df_build_payload(&answer_payload, &size,
@@ -131,31 +150,84 @@ static int xmp_readlink(const char *path, char *buf, size_t size)
 	return 0;
 }
 
-
-static int xmp_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-		       off_t offset, struct fuse_file_info *fi)
+static int action_readdir(int sock, struct df_packet_header *header,
+		char *payload)
 {
 	DIR *dp;
 	struct dirent *de;
+	int ret;
+	struct df_packet_header answer_header;
+	char __attribute__ ((cleanup(char_array_free))) *answer_payload = NULL;
+	size_t offset = 0;
+	char __attribute__ ((cleanup(char_array_free))) *path = NULL;
+	struct stat st;
+	size_t size = 0;
+	int64_t path_len;
+	enum df_op op_code = DF_OP_READDIR;
+	int64_t ioffset;
+	struct fuse_file_info fi;
 
-	(void) offset;
-	(void) fi;
+	/* retrieve the arguments */
+	ret = df_parse_payload(payload, &offset, header->payload_size,
+			DF_DATA_BUFFER, &path_len, &path,
+			DF_DATA_INT, &ioffset,
+			DF_DATA_FUSE_FILE_INFO, &fi,
+			DF_DATA_END);
+	if (0 > ret)
+		return errno_reply(sock, op_code, -ret);
+	if (path[path_len - 1] != '\0')
+		return errno_reply(sock, op_code, -ret);
+
+	if (dbg) {
+		fprintf(stderr, "path     = %s\n", path);
+		fprintf(stderr, "path_len = %lld\n", path_len);
+		fprintf(stderr, "ioffset  = %lld\n", ioffset);
+		fprintf(stderr, "action %s %s\n", df_op_code_to_str(op_code),
+				path);
+	}
 
 	dp = opendir(path);
 	if (dp == NULL)
 		return -errno;
 
+	/* build the answer */
+	ret = df_build_payload(&answer_payload, &size,
+			DF_DATA_FUSE_FILE_INFO, &fi,
+			DF_DATA_BLOCK_END);
+	if (0 > ret)
+		return errno_reply(sock, op_code, -ret);
+
+
 	while ((de = readdir(dp)) != NULL) {
-		struct stat st;
 		memset(&st, 0, sizeof(st));
 		st.st_ino = de->d_ino;
 		st.st_mode = de->d_type << 12;
-		if (filler(buf, de->d_name, &st, 0))
-			break;
+		ret = df_build_payload(&answer_payload, &size,
+
+				DF_DATA_BUFFER, strlen(de->d_name) + 1,
+				de->d_name,
+				DF_DATA_STAT, &st,
+				DF_DATA_BLOCK_END);
+		if (0 > ret)
+			return errno_reply(sock, op_code, -ret);
 	}
 
 	closedir(dp);
-	return 0;
+
+	ret = df_build_payload(&answer_payload, &size,
+			DF_DATA_END);
+	if (0 > ret)
+		return errno_reply(sock, op_code, -ret);
+
+	memset(&answer_header, 0, sizeof(answer_header));
+	answer_header.payload_size = size;
+	answer_header.op_code = op_code;
+	answer_header.error = 0;
+
+	/* send the answer */
+	ret = df_write_message(sock, &answer_header, answer_payload);
+
+	return ret;
 }
 
 static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
@@ -437,7 +509,6 @@ static int xmp_removexattr(const char *path, const char *name)
 static struct fuse_operations xmp_oper = {
 	.access		= xmp_access,
 	.readlink	= xmp_readlink,
-	.readdir	= xmp_readdir,
 	.mknod		= xmp_mknod,
 	.mkdir		= xmp_mkdir,
 	.symlink	= xmp_symlink,
@@ -480,7 +551,7 @@ typedef int (*action_t)(int sock, struct df_packet_header *header,
 static action_t dispatch_table[] = {
 	[DF_OP_INVALID] = action_enosys,
 
-	[DF_OP_READDIR] = action_enosys,
+	[DF_OP_READDIR] = action_readdir,
 	[DF_OP_GETATTR] = action_getattr,
 	[DF_OP_READLINK] = action_enosys,
 	[DF_OP_MKDIR] = action_enosys,
@@ -514,50 +585,51 @@ static action_t dispatch_table[] = {
 
 static int dispatch(int sock, struct df_packet_header *header, char *payload)
 {
-	/* TODO add some checking ? */
-	return dispatch_table[header->op_code](sock, header, payload);
-}
+	action_t action;
+	enum df_op op = header->op_code;
 
-#define FREE(p) do { \
-	free(p); \
-	(p) = NULL; \
-} while (0)
+	if (op > DF_OP_QUIT || (int)op < (int)DF_OP_INVALID)
+		return -ENOSYS;
+
+	action = dispatch_table[op];
+	if (NULL == action) {
+		fprintf(stderr, "NULL action %d\n", op);
+		return -EINVAL;
+	}
+
+	return action(sock, header, payload);
+}
 
 static int event_loop(int sock)
 {
 	int ret;
 	struct df_packet_header header;
-	char *payload = NULL;
+	char __attribute__ ((cleanup(char_array_free))) *payload = NULL;
 
 	do {
 		memset(&header, 0, sizeof(header));
 
 		ret = df_read_message(sock, &header, &payload);
 		if (0 > ret)
-			goto out;
-
-		if (dbg)
-			fprintf(stderr, "received op code %d (%s)\n",
-					header.op_code,
-					df_op_code_to_str(header.op_code));
+			return ret;
 
 		ret = dispatch(sock, &header, payload);
 		FREE(payload);
 		if (0 > ret)
-			goto out;
+			return ret;
 	} while (header.op_code != DF_OP_QUIT);
-out:
 
-	return ret;
+	return 0;
 }
 
 int main(void)
 {
-	int sock;
+	int sock = -1;
 	int ret;
 	struct sockaddr_in addr;
 	socklen_t addr_len = sizeof(addr);
 	uint32_t host_version;
+	sigset_t sig;
 
 	sock = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (0 > sock) {
@@ -580,6 +652,10 @@ int main(void)
 
 	printf("Connected to host\n");
 
+	sigemptyset(&sig);
+	sigaddset(&sig, SIGPIPE);
+	sigprocmask(SIG_BLOCK, &sig, NULL);
+
 	ret = df_read_handshake(sock, &host_version);
 	if (0 > ret)
 		return EXIT_FAILURE;
@@ -593,7 +669,13 @@ int main(void)
 				host_version, DF_PROTOCOL_VERSION);
 		return EXIT_FAILURE;
 	}
-	return event_loop(sock);
+
+	ret = event_loop(sock);
+
+	if (-1 != sock)
+		close(sock);
+
+	return ret;
 
 	/* TODO gcc warning */
 	printf("%p\n", &xmp_oper);
