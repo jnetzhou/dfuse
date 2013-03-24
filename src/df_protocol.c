@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
@@ -58,6 +59,49 @@ static const char const *type_to_str[] = {
 	[DF_DATA_STATVFS]        = "DF_DATA_STATVFS",
 	[DF_DATA_TIMESPEC]       = "DF_DATA_TIMESPEC",
 };
+
+
+static void dump_header(struct df_packet_header *header, int in)
+{
+	char *direction = in ? "received" : "sent";
+
+	fprintf(stderr, "header %s :\n", direction);
+	fprintf(stderr, "   payload_size   = %d\n", header->payload_size);
+	fprintf(stderr, "   op_code        = %u (%s)\n", header->op_code,
+			df_op_code_to_str(header->op_code));
+	fprintf(stderr, "   is_host_packet = %u\n", header->is_host_packet);
+	fprintf(stderr, "   error          = %u (%s)\n", header->error,
+			strerror(header->error));
+}
+
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
+static void dump_payload(const char *payload, unsigned size, int in)
+{
+	char *direction = in ? "received" : "sent";
+	unsigned i;
+	unsigned j;
+	unsigned lbound;
+	unsigned ubound;
+
+	fprintf(stderr, "payload %s :\n", direction);
+
+	for (i = 0; i < size;) {
+		ubound = MIN(size, i + 8);
+		lbound = i;
+		if (i % 8 == 0)
+			fprintf(stderr, "   ");
+		for (; i < ubound; i++)
+			fprintf(stderr, "0x%02x ", payload[i] & 0xFF);
+		if (i % 8)
+			for (j = 0; j < 8 - (i % 8); j++)
+				fprintf(stderr, "     ");
+		for (i = lbound; i < ubound; i++)
+			fprintf(stderr, "%c",
+					isprint(payload[i]) ? payload[i] : '.');
+		fprintf(stderr, "\n");
+	}
+}
 
 const char *df_op_code_to_str(enum df_op op)
 {
