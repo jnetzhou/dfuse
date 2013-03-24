@@ -4,8 +4,8 @@ CC := gcc
 DFUSE_BASE := /home/nicolas/workspace/C/adbfuse/
 BIN := df_device
 SRC := df_io.c \
-       df_device.c\
-       df_data_types.c\
+       df_device.c \
+       df_data_types.c \
        df_protocol.c
 
 CFLAGS += `pkg-config fuse --cflags`
