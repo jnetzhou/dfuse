@@ -5,16 +5,18 @@
  *
  * dfuse, or droid fuse : file system in userspace over the adb protocol
  */
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
 
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <errno.h>
 
-#include <sysdeps.h>
-#include <adb.h>
 #include <fdevent.h>
+#include <adb.h>
 #include <adb_client.h>
 #include <file_sync_service.h>
 
@@ -24,6 +26,7 @@
 
 #include "adb_bridge.h"
 #include "df_protocol.h"
+#include "df_data_types.h"
 
 /* #define DF_HOST_PORT 6665 */
 #define DF_HOST_PORT 6666
@@ -34,54 +37,11 @@
  */
 static int sock = -1;
 
-/**
- * TODO
- * from man 2 access :
- *   "check real user's permissions for a file"
- * @param path
- * @param mask
- * @return
- */
-static int df_access(const char *path, int mask)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 chmod :
- *   "chmod, fchmod - change permissions of a file"
- * @param path
- * @param mode
- * @return
- */
-static int df_chmod(const char *path, mode_t mode)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 chown :
- *   "chown, fchown, lchown - change ownership of a file"
- * @param path
- * @param uid_t
- * @param gid_t
- * @return
- */
-static int df_chown(const char *path, uid_t uid, gid_t gid)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
+static int dbg;
 
 #define FREE(p) do { \
-	free(p); \
+	if (p) \
+		free(p); \
 	(p) = NULL; \
 } while (0) \
 
@@ -94,17 +54,63 @@ static int df_getattr(const char *path, struct stat *stbuf)
 {
 	int ret;
 	char __attribute__ ((cleanup(char_array_free)))*payload = NULL;
-	size_t size;
+	char __attribute__ ((cleanup(char_array_free)))*answer_payload = NULL;
+	size_t size = 0;
 	struct df_packet_header header = {
 		.op_code = DF_OP_GETATTR,
 		.is_host_packet = 1,
 		.error = 0,
 	};
-	struct stat st;
 	size_t offset = 0;
 
 	ret = df_build_payload(&payload, &size,
 			DF_DATA_BUFFER, strlen(path) + 1, path,
+			DF_DATA_END);
+	if (0 > ret)
+		return ret;
+	header.payload_size = size;
+
+	ret = df_write_message(sock, &header, payload);
+	if (0 > ret)
+		return ret;
+
+	ret = df_read_message(sock, &header, &answer_payload);
+	if (0 > ret)
+		return ret;
+	if (0 != header.error)
+		return -header.error;
+
+	ret = df_parse_payload(answer_payload, &offset, header.payload_size,
+			DF_DATA_STAT, stbuf,
+			DF_DATA_END);
+
+	if (dbg)
+		dump_stat(stbuf);
+
+	return ret;
+}
+
+static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+		       off_t offset, struct fuse_file_info *fi)
+{
+	int ret;
+	char __attribute__ ((cleanup(char_array_free)))*payload = NULL;
+	size_t size = 0;
+	struct df_packet_header header = {
+		.op_code = DF_OP_READDIR,
+		.is_host_packet = 1,
+		.error = 0,
+	};
+	char __attribute__ ((cleanup(char_array_free)))*entry_path = NULL;
+	size_t payload_offset = 0;
+	int64_t ioffset = offset;
+	int64_t len;
+	struct stat st;
+
+	ret = df_build_payload(&payload, &size,
+			DF_DATA_BUFFER, strlen(path) + 1, path,
+			DF_DATA_INT, ioffset,
+			DF_DATA_FUSE_FILE_INFO, fi,
 			DF_DATA_END);
 	if (0 > ret)
 		return ret;
@@ -124,308 +130,41 @@ static int df_getattr(const char *path, struct stat *stbuf)
 		return -header.error;
 	}
 
-	printf("%u, %u, %u, %u\n",  header .op_code, header.is_host_packet,
-			header.error, header.payload_size);
+	ret = df_parse_payload(payload, &payload_offset, header.payload_size,
+			DF_DATA_FUSE_FILE_INFO, fi,
+			DF_DATA_BLOCK_END);
+	if (0 > ret)
+		return ret;
 
-	ret = df_parse_payload(payload, &offset, header.payload_size,
-			DF_DATA_STAT, &st,
+	/*
+	 * all has been parsed when consumed data (offset) equals size minus 8
+	 * because the last DF_DATA_END is never popped
+	 */
+	while (payload_offset + 8 < header.payload_size) {
+		ret = df_parse_payload(payload, &payload_offset,
+				header.payload_size,
+
+				DF_DATA_BUFFER, &len, &entry_path,
+				DF_DATA_STAT, &st,
+				DF_DATA_BLOCK_END);
+		if (0 > ret)
+			return ret;
+		if (filler(buf, entry_path, &st, 0))
+			break;
+		FREE(entry_path);
+	}
+
+	ret = df_parse_payload(payload, &payload_offset, header.payload_size,
 			DF_DATA_END);
+	if (0 > ret)
+		return ret;
 
 	return ret;
 }
 
-/**
- * TODO
- * from man 2 mkidr :
- *   "mkdir - create a directory"
- * @param path
- * @param mode
- * @return
- */
-static int df_mkdir(const char *path, mode_t mode)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 mknod :
- *   "mknod - create a special or ordinary file"
- * @param path
- * @param mode
- * @param rdev
- * @return
- */
-static int df_mknod(const char *path, mode_t mode, dev_t rdev)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 open :
- *   "open, creat - open and possibly create a file or device"
- * @param path
- * @param fi
- * @return
- */
-static int df_open(const char *path, struct fuse_file_info *fi)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 link :
- *   "link - make a new name for a file"
- * @param from
- * @param to
- * @return
- */
-static int df_link(const char *from, const char *to)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 read :
- *   "read - read from a file descriptor"
- * @param path
- * @param buf
- * @param size
- * @param offset
- * @param fi
- * @return
- */
-static int df_read(const char *path, char *buf, size_t size, off_t offset,
-		    struct fuse_file_info *fi)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 read :
- *   "readdir - read directory entry"
- * @param path
- * @param buf
- * @param filler
- * @param offset
- * @param fi
- * @return
- */
-static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-		       off_t offset, struct fuse_file_info *fi)
-{
-	int ret;
-	int syncfd;
-	void sync_ls_cb(unsigned mode, unsigned size, unsigned time,
-			const char *name, void *cookie)
-	{
-		struct stat st;
-		memset(&st, 0, sizeof(st));
-		st.st_mode = mode;
-		st.st_size = size;
-		st.st_mtime = time;
-		ret = filler(buf, name, NULL, 0);
-		if (0 > ret)
-			fprintf(stderr, "%s : %s\n",  __func__, adb_error());
-	}
-
-	syncfd = adb_connect("sync:");
-	if (0 > syncfd) {
-		fprintf(stderr, "sync error: %s\n", adb_error());
-		return -EIO;
-	}
-
-	ret = sync_ls(syncfd, path, sync_ls_cb, 0);
-	if (0 > ret)
-		return -EIO;
-
-	sync_quit(syncfd);
-
-	return 0;
-}
-
-/**
- * TODO
- * from man 2 readlink :
- *   "readlink - read value of a symbolic link"
- * @param path
- * @param buf
- * @param size
- * @return
- */
-static int df_readlink(const char *path, char *buf, size_t size)
-{
-	int shellfd;
-	int len;
-	int ret;
-	char *cmd;
-	char *arrow;
-	char *cr;
-
-	/* send "ls -l PATH" command */
-	ret = asprintf(&cmd, "shell:ls -l %s", path);
-	if (-1 == ret)
-		return -ENOMEM;
-	shellfd = adb_connect(cmd);
-	free(cmd);
-	if (0 > shellfd) {
-		fprintf(stderr, "shell error: %s\n", adb_error());
-		return -EIO;
-	}
-
-	/* read answer */
-	len = TEMP_FAILURE_RETRY(adb_read(shellfd, buf, size));
-	if (0 == len)
-		return -ENOENT;
-	if (0 > len)
-		return -errno;
-	if (len >= size)
-		return -ENOMEM;
-	adb_close(shellfd);
-
-	/* strip \n */
-	buf[len - 1] = '\0';
-	/* strip \r if any */
-	if (1 < len) {
-		cr = strchr(buf, '\r');
-		if (NULL != cr)
-			*cr = '\0';
-	}
-	/* the link target is after the " -> " pattern */
-	arrow = strstr(buf, " -> ");
-	if (NULL == arrow)
-		return -ENOENT;
-	arrow += 4;
-
-	memmove(buf, arrow, len - (arrow - buf));
-
-	return 0;
-}
-
-/**
- * TODO
- * from man 2 rename :
- *   "rename - change the name or location of a file"
- * @param from
- * @param to
- * @return
- */
-static int df_rename(const char *from, const char *to)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 rename :
- *   "rmdir - delete a directory"
- * @param path
- * @return
- */
-static int df_rmdir(const char *path)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 symlink :
- *   "symlink - make a new name for a file"
- * @param from
- * @param to
- * @return
- */
-static int df_symlink(const char *from, const char *to)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 truncate :
- *   "truncate, ftruncate - truncate a file to a specified length"
- * @param path
- * @param size
- * @return
- */
-static int df_truncate(const char *path, off_t size)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 unlink :
- *   "unlink - delete a name and possibly the file it refers to"
- * @param path
- * @return
- */
-static int df_unlink(const char *path)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
-/**
- * TODO
- * from man 2 write :
- *   "write - write to a file descriptor"
- * @param path
- * @param buf
- * @param size
- * @param offset
- * @param fi
- * @return
- */
-static int df_write(const char *path, const char *buf, size_t size,
-		     off_t offset, struct fuse_file_info *fi)
-{
-	fprintf(stderr, "%s STUB !!!\n", __func__);
-
-	return -ENOSYS;
-}
-
 static struct fuse_operations df_oper = {
-	.access		= df_access,
-	.chmod		= df_chmod,
-	.chown		= df_chown,
 	.getattr	= df_getattr,
-	.mkdir		= df_mkdir,
-	.mknod		= df_mknod,
-	.open		= df_open,
-	.link		= df_link,
-	.read		= df_read,
 	.readdir	= df_readdir,
-	.readlink	= df_readlink,
-	.rename		= df_rename,
-	.rmdir		= df_rmdir,
-	.symlink	= df_symlink,
-	.truncate	= df_truncate,
-	.unlink		= df_unlink,
-	.write		= df_write,
 };
 
 /**
@@ -446,7 +185,7 @@ static struct fuse_operations df_oper = {
 	if (0 > hellofd)
 		return 0;
 
-	adb_close(hellofd);
+	close(hellofd);
 
 	return 1;
 }
@@ -529,5 +268,10 @@ int main(int argc, char *argv[])
 
 	printf("File system initialization\n");
 
-	return fuse_main(argc, argv, &df_oper, NULL);
+	ret = fuse_main(argc, argv, &df_oper, NULL);
+
+	close(sock);
+	close(srv_sock);
+
+	return ret;
 }
