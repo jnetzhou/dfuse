@@ -429,15 +429,6 @@ int df_parse_payload(char *payload, size_t *offset, size_t size, ...)
 	va_start(args, size);
 	do {
 		requested_data_type = va_arg(args, enum df_data_type);
-		/*
-		 * if DF_DATA_END is passed :
-		 *  * don't pop the data type, with readdir, it is not passed
-		 *  * don't update the offset, for the same reason
-		 *
-		 * when all has been parsed, *offset + 8 = size, but, again for
-		 * readdir, it's not necessary that all has been read after one
-		 * call
-		 */
 		if (DF_DATA_BLOCK_END == requested_data_type)
 			break;
 
