@@ -125,12 +125,8 @@ static int action_getattr(struct df_packet_header *header, char *payload,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-	memset(ans_hdr, 0, sizeof(*ans_hdr));
-	ans_hdr->payload_size = size;
-	ans_hdr->op_code = op_code;
-	ans_hdr->error = 0;
 
-	return 0;
+	return fill_header(ans_hdr, size, op_code, 0);
 }
 
 static int xmp_access(const char *path, int mask)
@@ -189,17 +185,13 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-	memset(ans_hdr, 0, sizeof(*ans_hdr));
-	ans_hdr->payload_size = size;
-	ans_hdr->op_code = op_code;
-	ans_hdr->error = 0;
 
 	if (dbg) {
 		fprintf(stderr, "\tresult :\n");
 		fprintf(stderr, "\t  result : %s\n", link);
 	}
 
-	return 0;
+	return fill_header(ans_hdr, size, op_code, 0);
 }
 
 static int action_readdir(struct df_packet_header *header, char *payload,
@@ -269,12 +261,7 @@ static int action_readdir(struct df_packet_header *header, char *payload,
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 
-	memset(ans_hdr, 0, sizeof(*ans_hdr));
-	ans_hdr->payload_size = size;
-	ans_hdr->op_code = op_code;
-	ans_hdr->error = 0;
-
-	return 0;
+	return fill_header(ans_hdr, size, op_code, 0);
 }
 
 static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
