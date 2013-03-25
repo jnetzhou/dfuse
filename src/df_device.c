@@ -85,28 +85,30 @@ static int action_getattr(struct df_packet_header *header, char *payload,
 {
 	int ret;
 	size_t offset = 0;
-	char __attribute__ ((cleanup(char_array_free))) *path = NULL;
-	struct stat st;
 	size_t size = 0;
-	int64_t path_len;
 	enum df_op op_code = DF_OP_GETATTR;
+
+	int64_t in_path_len;
+	char __attribute__ ((cleanup(char_array_free))) *in_path = NULL;
+
+	struct stat out_stat;
 
 	/* retrieve the arguments */
 	ret = df_parse_payload(payload, &offset, header->payload_size,
-			DF_DATA_BUFFER, &path_len, &path,
+			DF_DATA_BUFFER, &in_path_len, &in_path,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-	path[path_len - 1] = '\0';
+	in_path[in_path_len - 1] = '\0';
 
 	/* perform the syscall */
-	ret = lstat(path, &st);
+	ret = lstat(in_path, &out_stat);
 	if (ret == -1)
 		return errno_reply(op_code, errno, ans_hdr, ans_pld);
 
 	/* build the answer */
 	ret = df_build_payload(ans_pld, &size,
-			DF_DATA_STAT, &st,
+			DF_DATA_STAT, &out_stat,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
@@ -129,35 +131,37 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 		struct df_packet_header *ans_hdr, char **ans_pld)
 {
 	int ret;
-	char __attribute__((cleanup(char_array_free))) *path = NULL;
-	int64_t path_len;
-	int64_t target_len;
-	char __attribute__((cleanup(char_array_free))) *link = NULL;
-	size_t link_len = 0;
 	size_t offset = 0;
 	size_t size = 0;
 	enum df_op op_code = DF_OP_GETATTR;
 
+	char __attribute__((cleanup(char_array_free))) *in_path = NULL;
+	int64_t in_path_len;
+	int64_t in_size;
+
+	char __attribute__((cleanup(char_array_free))) *out_buf = NULL;
+	size_t out_buf_len = 0;
+
 	/* retrieve the arguments */
 	ret = df_parse_payload(payload, &offset, header->payload_size,
-			DF_DATA_BUFFER, &path_len, &path,
-			DF_DATA_INT, &target_len,
+			DF_DATA_BUFFER, &in_path_len, &in_path,
+			DF_DATA_INT, &in_size,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-	path[path_len - 1] = '\0';
+	in_path[in_path_len - 1] = '\0';
 
 	/* perform the syscall */
-	link = malloc(target_len);
-	ret = readlink(path, link, target_len - 1);
+	out_buf = malloc(in_size);
+	ret = readlink(in_path, out_buf, in_size - 1);
 	if (ret == -1)
 		return errno_reply(op_code, errno, ans_hdr, ans_pld);
-	link_len = MIN(ret + 1, target_len);
-	link[link_len - 1] = '\0';
+	out_buf_len = MIN(ret + 1, in_size);
+	out_buf[out_buf_len - 1] = '\0';
 
 	/* build the answer */
 	ret = df_build_payload(ans_pld, &size,
-			DF_DATA_BUFFER, link_len, link,
+			DF_DATA_BUFFER, out_buf_len, out_buf,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
@@ -168,49 +172,49 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 static int action_readdir(struct df_packet_header *header, char *payload,
 		struct df_packet_header *ans_hdr, char **ans_pld)
 {
+	int ret;
 	DIR *dp;
 	struct dirent *de;
-	int ret;
 	size_t offset = 0;
-	char __attribute__ ((cleanup(char_array_free))) *path = NULL;
-	struct stat st;
 	size_t size = 0;
-	int64_t path_len;
 	enum df_op op_code = DF_OP_READDIR;
-	int64_t ioffset;
-	struct fuse_file_info fi;
+
+	int64_t in_path_len;
+	char __attribute__ ((cleanup(char_array_free))) *in_path = NULL;
+	int64_t in_offset;
+	struct fuse_file_info in_fi;
+
+	struct stat in_stat;
 
 	/* retrieve the arguments */
 	ret = df_parse_payload(payload, &offset, header->payload_size,
-			DF_DATA_BUFFER, &path_len, &path,
-			DF_DATA_INT, &ioffset,
-			DF_DATA_FUSE_FILE_INFO, &fi,
+			DF_DATA_BUFFER, &in_path_len, &in_path,
+			DF_DATA_INT, &in_offset,
+			DF_DATA_FUSE_FILE_INFO, &in_fi,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-	path[path_len - 1] = '\0';
+	in_path[in_path_len - 1] = '\0';
 
-	dp = opendir(path);
+	dp = opendir(in_path);
 	if (dp == NULL)
 		return errno_reply(op_code, -errno, ans_hdr, ans_pld);
 
 	/* build the answer */
 	ret = df_build_payload(ans_pld, &size,
-			DF_DATA_FUSE_FILE_INFO, &fi,
+			DF_DATA_FUSE_FILE_INFO, &in_fi,
 			DF_DATA_BLOCK_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 
-
 	while ((de = readdir(dp)) != NULL) {
-		memset(&st, 0, sizeof(st));
-		st.st_ino = de->d_ino;
-		st.st_mode = de->d_type << 12;
+		memset(&in_stat, 0, sizeof(in_stat));
+		in_stat.st_ino = de->d_ino;
+		in_stat.st_mode = de->d_type << 12;
 		ret = df_build_payload(ans_pld, &size,
-
 				DF_DATA_BUFFER, strlen(de->d_name) + 1,
 				de->d_name,
-				DF_DATA_STAT, &st,
+				DF_DATA_STAT, &in_stat,
 				DF_DATA_BLOCK_END);
 		if (0 > ret)
 			return errno_reply(op_code, -ret, ans_hdr, ans_pld);
