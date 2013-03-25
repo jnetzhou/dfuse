@@ -45,8 +45,6 @@
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
-static int dbg;
-
 #define FREE(p) do { \
 	if (p) {\
 		free(p); \
@@ -91,7 +89,6 @@ static int action_getattr(struct df_packet_header *header, char *payload,
 	struct stat st;
 	size_t size = 0;
 	int64_t path_len;
-	int ipath_len;
 	enum df_op op_code = DF_OP_GETATTR;
 
 	/* retrieve the arguments */
@@ -102,22 +99,10 @@ static int action_getattr(struct df_packet_header *header, char *payload,
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 	path[path_len - 1] = '\0';
 
-	if (dbg) {
-		fprintf(stderr, "offset   = %u\n", offset);
-		ipath_len = path_len;
-		fprintf(stderr, "path_len = %d\n", ipath_len);
-		fprintf(stderr, "path     = %.*s\n", ipath_len, path);
-		fprintf(stderr, "action %s %s\n", df_op_code_to_str(op_code),
-				path);
-	}
-
 	/* perform the syscall */
 	ret = lstat(path, &st);
 	if (ret == -1)
 		return errno_reply(op_code, errno, ans_hdr, ans_pld);
-
-	if (dbg)
-		dump_stat(&st);
 
 	/* build the answer */
 	ret = df_build_payload(ans_pld, &size,
@@ -160,16 +145,7 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-	if (path[path_len - 1] != '\0')
-		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-
-	if (dbg) {
-		fprintf(stderr, "action %s\n", df_op_code_to_str(op_code));
-		fprintf(stderr, "\tinput :\n");
-		fprintf(stderr, "\t  path_len   = %lld\n", path_len);
-		fprintf(stderr, "\t  path       = %.*s\n", (int)path_len, path);
-		fprintf(stderr, "\t  target_len = %lld\n", target_len);
-	}
+	path[path_len - 1] = '\0';
 
 	/* perform the syscall */
 	link = malloc(target_len);
@@ -185,11 +161,6 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-
-	if (dbg) {
-		fprintf(stderr, "\tresult :\n");
-		fprintf(stderr, "\t  result : %s\n", link);
-	}
 
 	return fill_header(ans_hdr, size, op_code, 0);
 }
@@ -217,16 +188,7 @@ static int action_readdir(struct df_packet_header *header, char *payload,
 			DF_DATA_END);
 	if (0 > ret)
 		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-	if (path[path_len - 1] != '\0')
-		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-
-	if (dbg) {
-		fprintf(stderr, "path     = %s\n", path);
-		fprintf(stderr, "path_len = %lld\n", path_len);
-		fprintf(stderr, "ioffset  = %lld\n", ioffset);
-		fprintf(stderr, "action %s %s\n", df_op_code_to_str(op_code),
-				path);
-	}
+	path[path_len - 1] = '\0';
 
 	dp = opendir(path);
 	if (dp == NULL)
