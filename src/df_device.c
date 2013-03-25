@@ -73,18 +73,17 @@ static int fill_header(struct df_packet_header *header, size_t size,
 	return 0;
 }
 static int errno_reply(enum df_op op_code, int err,
-		struct df_packet_header *answer_header, char **answer_payload)
+		struct df_packet_header *ans_hdr, char **ans_pld)
 {
-	*answer_payload = strdup(strerror(err));
-	if (NULL == *answer_payload)
+	*ans_pld = strdup(strerror(err));
+	if (NULL == *ans_pld)
 		return -errno;
 
-	return fill_header(answer_header, strlen(*answer_payload) + 1, op_code,
-			err);
+	return fill_header(ans_hdr, strlen(*ans_pld) + 1, op_code, err);
 }
 
 static int action_getattr(struct df_packet_header *header, char *payload,
-		struct df_packet_header *answer_header, char **answer_payload)
+		struct df_packet_header *ans_hdr, char **ans_pld)
 {
 	int ret;
 	size_t offset = 0;
@@ -100,8 +99,7 @@ static int action_getattr(struct df_packet_header *header, char *payload,
 			DF_DATA_BUFFER, &path_len, &path,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 	path[path_len - 1] = '\0';
 
 	if (dbg) {
@@ -116,23 +114,21 @@ static int action_getattr(struct df_packet_header *header, char *payload,
 	/* perform the syscall */
 	ret = lstat(path, &st);
 	if (ret == -1)
-		return errno_reply(op_code, errno, answer_header,
-				answer_payload);
+		return errno_reply(op_code, errno, ans_hdr, ans_pld);
 
 	if (dbg)
 		dump_stat(&st);
 
 	/* build the answer */
-	ret = df_build_payload(answer_payload, &size,
+	ret = df_build_payload(ans_pld, &size,
 			DF_DATA_STAT, &st,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
-	memset(answer_header, 0, sizeof(*answer_header));
-	answer_header->payload_size = size;
-	answer_header->op_code = op_code;
-	answer_header->error = 0;
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
+	memset(ans_hdr, 0, sizeof(*ans_hdr));
+	ans_hdr->payload_size = size;
+	ans_hdr->op_code = op_code;
+	ans_hdr->error = 0;
 
 	return 0;
 }
@@ -149,7 +145,7 @@ static int xmp_access(const char *path, int mask)
 }
 
 static int action_readlink(struct df_packet_header *header, char *payload,
-		struct df_packet_header *answer_header, char **answer_payload)
+		struct df_packet_header *ans_hdr, char **ans_pld)
 {
 	int ret;
 	char __attribute__((cleanup(char_array_free))) *path = NULL;
@@ -167,11 +163,9 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 			DF_DATA_INT, &target_len,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 	if (path[path_len - 1] != '\0')
-		return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 
 	if (dbg) {
 		fprintf(stderr, "action %s\n", df_op_code_to_str(op_code));
@@ -185,22 +179,20 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 	link = malloc(target_len);
 	ret = readlink(path, link, target_len - 1);
 	if (ret == -1)
-		return errno_reply(op_code, errno, answer_header,
-				answer_payload);
+		return errno_reply(op_code, errno, ans_hdr, ans_pld);
 	link_len = MIN(ret + 1, target_len);
 	link[link_len - 1] = '\0';
 
 	/* build the answer */
-	ret = df_build_payload(answer_payload, &size,
+	ret = df_build_payload(ans_pld, &size,
 			DF_DATA_BUFFER, link_len, link,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
-	memset(answer_header, 0, sizeof(*answer_header));
-	answer_header->payload_size = size;
-	answer_header->op_code = op_code;
-	answer_header->error = 0;
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
+	memset(ans_hdr, 0, sizeof(*ans_hdr));
+	ans_hdr->payload_size = size;
+	ans_hdr->op_code = op_code;
+	ans_hdr->error = 0;
 
 	if (dbg) {
 		fprintf(stderr, "\tresult :\n");
@@ -211,7 +203,7 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 }
 
 static int action_readdir(struct df_packet_header *header, char *payload,
-		struct df_packet_header *answer_header, char **answer_payload)
+		struct df_packet_header *ans_hdr, char **ans_pld)
 {
 	DIR *dp;
 	struct dirent *de;
@@ -232,11 +224,9 @@ static int action_readdir(struct df_packet_header *header, char *payload,
 			DF_DATA_FUSE_FILE_INFO, &fi,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 	if (path[path_len - 1] != '\0')
-		return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 
 	if (dbg) {
 		fprintf(stderr, "path     = %s\n", path);
@@ -248,45 +238,41 @@ static int action_readdir(struct df_packet_header *header, char *payload,
 
 	dp = opendir(path);
 	if (dp == NULL)
-		return errno_reply(op_code, -errno, answer_header,
-				answer_payload);
+		return errno_reply(op_code, -errno, ans_hdr, ans_pld);
 
 	/* build the answer */
-	ret = df_build_payload(answer_payload, &size,
+	ret = df_build_payload(ans_pld, &size,
 			DF_DATA_FUSE_FILE_INFO, &fi,
 			DF_DATA_BLOCK_END);
 	if (0 > ret)
-		return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 
 
 	while ((de = readdir(dp)) != NULL) {
 		memset(&st, 0, sizeof(st));
 		st.st_ino = de->d_ino;
 		st.st_mode = de->d_type << 12;
-		ret = df_build_payload(answer_payload, &size,
+		ret = df_build_payload(ans_pld, &size,
 
 				DF_DATA_BUFFER, strlen(de->d_name) + 1,
 				de->d_name,
 				DF_DATA_STAT, &st,
 				DF_DATA_BLOCK_END);
 		if (0 > ret)
-			return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
+			return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 	}
 	closedir(dp);
 
 	/* terminate the payload */
-	ret = df_build_payload(answer_payload, &size,
+	ret = df_build_payload(ans_pld, &size,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(op_code, -ret, answer_header,
-				answer_payload);
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
 
-	memset(answer_header, 0, sizeof(*answer_header));
-	answer_header->payload_size = size;
-	answer_header->op_code = op_code;
-	answer_header->error = 0;
+	memset(ans_hdr, 0, sizeof(*ans_hdr));
+	ans_hdr->payload_size = size;
+	ans_hdr->op_code = op_code;
+	ans_hdr->error = 0;
 
 	return 0;
 }
@@ -601,14 +587,13 @@ static struct fuse_operations xmp_oper = {
 
 int action_enosys(struct df_packet_header *header,
 		char __attribute__((unused)) *payload,
-		struct df_packet_header *answer_header, char **answer_payload)
+		struct df_packet_header *ans_hdr, char **ans_pld)
 {
-	return errno_reply(header->op_code, ENOSYS, answer_header,
-			answer_payload);
+	return errno_reply(header->op_code, ENOSYS, ans_hdr, ans_pld);
 }
 
 typedef int (*action_t)(struct df_packet_header *header, char *payload,
-		struct df_packet_header *answer_header, char **answer_payload);
+		struct df_packet_header *ans_hdr, char **ans_pld);
 
 static action_t dispatch_table[] = {
 	[DF_OP_INVALID] = action_enosys,
@@ -646,7 +631,7 @@ static action_t dispatch_table[] = {
 };
 
 static int dispatch(struct df_packet_header *header, char *payload,
-		struct df_packet_header *answer_header, char **answer_payload)
+		struct df_packet_header *ans_hdr, char **ans_pld)
 {
 	action_t action;
 	enum df_op op = header->op_code;
@@ -660,7 +645,7 @@ static int dispatch(struct df_packet_header *header, char *payload,
 		return -EINVAL;
 	}
 
-	return action(header, payload, answer_header, answer_payload);
+	return action(header, payload, ans_hdr, ans_pld);
 }
 
 static int event_loop(int sock)
@@ -668,8 +653,8 @@ static int event_loop(int sock)
 	int ret;
 	struct df_packet_header header;
 	char __attribute__ ((cleanup(char_array_free))) *payload = NULL;
-	struct df_packet_header answer_header;
-	char __attribute__ ((cleanup(char_array_free))) *answer_payload = NULL;
+	struct df_packet_header ans_hdr;
+	char __attribute__ ((cleanup(char_array_free))) *ans_pld = NULL;
 
 	do {
 		memset(&header, 0, sizeof(header));
@@ -677,15 +662,14 @@ static int event_loop(int sock)
 		if (0 > ret)
 			return ret;
 
-		memset(&answer_header, 0, sizeof(answer_header));
-		ret = dispatch(&header, payload,
-				&answer_header, &answer_payload);
+		memset(&ans_hdr, 0, sizeof(ans_hdr));
+		ret = dispatch(&header, payload, &ans_hdr, &ans_pld);
 		FREE(payload);
 		if (0 > ret)
 			return ret;
 
-		ret = df_write_message(sock, &answer_header, answer_payload);
-		FREE(answer_payload);
+		ret = df_write_message(sock, &ans_hdr, ans_pld);
+		FREE(ans_pld);
 		if (0 > ret)
 			return ret;
 	} while (header.op_code != DF_OP_QUIT);
