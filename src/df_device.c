@@ -43,6 +43,8 @@
 
 #define DF_DEVICE_PORT 6666
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+
 static int dbg;
 
 #define FREE(p) do { \
@@ -138,16 +140,67 @@ static int xmp_access(const char *path, int mask)
 	return 0;
 }
 
-static int xmp_readlink(const char *path, char *buf, size_t size)
+static int action_readlink(int sock, struct df_packet_header *header,
+		char *payload)
 {
-	int res;
+	int ret;
+	char __attribute__((cleanup(char_array_free))) *path = NULL;
+	int64_t path_len;
+	int64_t target_len;
+	char __attribute__((cleanup(char_array_free))) *link = NULL;
+	size_t link_len = 0;
+	struct df_packet_header answer_header;
+	char __attribute__((cleanup(char_array_free))) *answer_payload = NULL;
+	size_t offset = 0;
+	size_t size = 0;
+	enum df_op op_code = DF_OP_GETATTR;
 
-	res = readlink(path, buf, size - 1);
-	if (res == -1)
-		return -errno;
+	/* retrieve the arguments */
+	ret = df_parse_payload(payload, &offset, header->payload_size,
+			DF_DATA_BUFFER, &path_len, &path,
+			DF_DATA_INT, &target_len,
+			DF_DATA_END);
+	if (0 > ret)
+		return errno_reply(sock, op_code, -ret);
+	if (path[path_len - 1] != '\0')
+		return errno_reply(sock, op_code, -ret);
 
-	buf[res] = '\0';
-	return 0;
+	if (dbg) {
+		fprintf(stderr, "action %s\n", df_op_code_to_str(op_code));
+		fprintf(stderr, "\tinput :\n");
+		fprintf(stderr, "\t  path_len   = %lld\n", path_len);
+		fprintf(stderr, "\t  path       = %.*s\n", (int)path_len, path);
+		fprintf(stderr, "\t  target_len = %lld\n", target_len);
+	}
+
+	/* perform the syscall */
+	link = malloc(target_len);
+	ret = readlink(path, link, target_len - 1);
+	if (ret == -1)
+		return errno_reply(sock, op_code, errno);
+	link_len = MIN(ret + 1, target_len);
+	link[link_len - 1] = '\0';
+
+	/* build the answer */
+	ret = df_build_payload(&answer_payload, &size,
+			DF_DATA_BUFFER, link_len, link,
+			DF_DATA_END);
+	if (0 > ret)
+		return errno_reply(sock, op_code, -ret);
+	memset(&answer_header, 0, sizeof(answer_header));
+	answer_header.payload_size = size;
+	answer_header.op_code = op_code;
+	answer_header.error = 0;
+
+	/* send the answer */
+	ret = df_write_message(sock, &answer_header, answer_payload);
+
+	if (dbg) {
+		fprintf(stderr, "\tresult :\n");
+		fprintf(stderr, "\t  result : %s\n", link);
+	}
+
+	return ret;
 }
 
 static int action_readdir(int sock, struct df_packet_header *header,
@@ -508,7 +561,6 @@ static int xmp_removexattr(const char *path, const char *name)
 
 static struct fuse_operations xmp_oper = {
 	.access		= xmp_access,
-	.readlink	= xmp_readlink,
 	.mknod		= xmp_mknod,
 	.mkdir		= xmp_mkdir,
 	.symlink	= xmp_symlink,
@@ -553,7 +605,7 @@ static action_t dispatch_table[] = {
 
 	[DF_OP_READDIR] = action_readdir,
 	[DF_OP_GETATTR] = action_getattr,
-	[DF_OP_READLINK] = action_enosys,
+	[DF_OP_READLINK] = action_readlink,
 	[DF_OP_MKDIR] = action_enosys,
 	[DF_OP_OPEN] = action_enosys,
 	[DF_OP_RELEASE] = action_enosys,

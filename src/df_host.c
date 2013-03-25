@@ -162,9 +162,57 @@ static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	return ret;
 }
 
+static int df_readlink(const char *path, char *buf, size_t size)
+{
+	int ret;
+	char __attribute__((cleanup(char_array_free))) *payload = NULL;
+	char __attribute__((cleanup(char_array_free))) *answer_payload = NULL;
+	size_t pl_size = 0;
+	struct df_packet_header header = {
+		.op_code = DF_OP_READLINK,
+		.is_host_packet = 1,
+		.error = 0,
+	};
+	size_t offset = 0;
+	int64_t target_len = size;
+	char __attribute__((cleanup(char_array_free))) *tmp_buf = NULL;
+
+	ret = df_build_payload(&payload, &pl_size,
+			DF_DATA_BUFFER, strlen(path) + 1, path,
+			DF_DATA_INT, target_len,
+			DF_DATA_END);
+	if (0 > ret)
+		return ret;
+	header.payload_size = pl_size;
+
+	ret = df_write_message(sock, &header, payload);
+	if (0 > ret)
+		return ret;
+
+	ret = df_read_message(sock, &header, &answer_payload);
+	if (0 > ret)
+		return ret;
+	if (0 != header.error)
+		return -header.error;
+
+	ret = df_parse_payload(answer_payload, &offset, header.payload_size,
+			DF_DATA_BUFFER, &target_len, &tmp_buf,
+			DF_DATA_END);
+
+	strncpy(buf, tmp_buf, size);
+	buf[size] = '\0';
+
+	if (dbg)
+		fprintf(stderr, "[%s] target of %s is %s\n",
+				df_op_code_to_str(header.op_code), path, buf);
+
+	return ret;
+}
+
 static struct fuse_operations df_oper = {
 	.getattr	= df_getattr,
 	.readdir	= df_readdir,
+	.readlink	= df_readlink,
 };
 
 /**
