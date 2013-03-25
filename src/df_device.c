@@ -59,25 +59,25 @@ static void char_array_free(char **array)
 	FREE(*array);
 }
 
-static int errno_reply(int sock, enum df_op op_code, int err)
+static int errno_reply(enum df_op op_code, int err,
+		struct df_packet_header *answer_header, char **answer_payload)
 {
-	struct df_packet_header answer_header;
-	char *answer_payload = strerror(err);
+	*answer_payload = strdup(strerror(err));
+	if (NULL == *answer_payload)
+		return -errno;
 
-	memset(&answer_header, 0, sizeof(answer_header));
-	answer_header.payload_size = strlen(answer_payload) + 1;
-	answer_header.op_code = op_code;
-	answer_header.error = err;
+	memset(answer_header, 0, sizeof(*answer_header));
+	answer_header->payload_size = strlen(*answer_payload) + 1;
+	answer_header->op_code = op_code;
+	answer_header->error = err;
 
-	return df_write_message(sock, &answer_header, answer_payload);
+	return 0;
 }
 
-static int action_getattr(int sock, struct df_packet_header *header,
-		char *payload)
+static int action_getattr(struct df_packet_header *header, char *payload,
+		struct df_packet_header *answer_header, char **answer_payload)
 {
 	int ret;
-	struct df_packet_header answer_header;
-	char __attribute__ ((cleanup(char_array_free))) *answer_payload = NULL;
 	size_t offset = 0;
 	char __attribute__ ((cleanup(char_array_free))) *path = NULL;
 	struct stat st;
@@ -91,9 +91,9 @@ static int action_getattr(int sock, struct df_packet_header *header,
 			DF_DATA_BUFFER, &path_len, &path,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(sock, op_code, -ret);
-	if (path[path_len - 1] != '\0')
-		return errno_reply(sock, op_code, -ret);
+		return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
+	path[path_len - 1] = '\0';
 
 	if (dbg) {
 		fprintf(stderr, "offset   = %u\n", offset);
@@ -107,26 +107,25 @@ static int action_getattr(int sock, struct df_packet_header *header,
 	/* perform the syscall */
 	ret = lstat(path, &st);
 	if (ret == -1)
-		return errno_reply(sock, op_code, errno);
+		return errno_reply(op_code, errno, answer_header,
+				answer_payload);
 
 	if (dbg)
 		dump_stat(&st);
 
 	/* build the answer */
-	ret = df_build_payload(&answer_payload, &size,
+	ret = df_build_payload(answer_payload, &size,
 			DF_DATA_STAT, &st,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(sock, op_code, -ret);
-	memset(&answer_header, 0, sizeof(answer_header));
-	answer_header.payload_size = size;
-	answer_header.op_code = op_code;
-	answer_header.error = 0;
+		return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
+	memset(answer_header, 0, sizeof(*answer_header));
+	answer_header->payload_size = size;
+	answer_header->op_code = op_code;
+	answer_header->error = 0;
 
-	/* send the answer */
-	ret = df_write_message(sock, &answer_header, answer_payload);
-
-	return ret;
+	return 0;
 }
 
 static int xmp_access(const char *path, int mask)
@@ -140,8 +139,8 @@ static int xmp_access(const char *path, int mask)
 	return 0;
 }
 
-static int action_readlink(int sock, struct df_packet_header *header,
-		char *payload)
+static int action_readlink(struct df_packet_header *header, char *payload,
+		struct df_packet_header *answer_header, char **answer_payload)
 {
 	int ret;
 	char __attribute__((cleanup(char_array_free))) *path = NULL;
@@ -149,8 +148,6 @@ static int action_readlink(int sock, struct df_packet_header *header,
 	int64_t target_len;
 	char __attribute__((cleanup(char_array_free))) *link = NULL;
 	size_t link_len = 0;
-	struct df_packet_header answer_header;
-	char __attribute__((cleanup(char_array_free))) *answer_payload = NULL;
 	size_t offset = 0;
 	size_t size = 0;
 	enum df_op op_code = DF_OP_GETATTR;
@@ -161,9 +158,11 @@ static int action_readlink(int sock, struct df_packet_header *header,
 			DF_DATA_INT, &target_len,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(sock, op_code, -ret);
+		return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
 	if (path[path_len - 1] != '\0')
-		return errno_reply(sock, op_code, -ret);
+		return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
 
 	if (dbg) {
 		fprintf(stderr, "action %s\n", df_op_code_to_str(op_code));
@@ -177,40 +176,37 @@ static int action_readlink(int sock, struct df_packet_header *header,
 	link = malloc(target_len);
 	ret = readlink(path, link, target_len - 1);
 	if (ret == -1)
-		return errno_reply(sock, op_code, errno);
+		return errno_reply(op_code, errno, answer_header,
+				answer_payload);
 	link_len = MIN(ret + 1, target_len);
 	link[link_len - 1] = '\0';
 
 	/* build the answer */
-	ret = df_build_payload(&answer_payload, &size,
+	ret = df_build_payload(answer_payload, &size,
 			DF_DATA_BUFFER, link_len, link,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(sock, op_code, -ret);
-	memset(&answer_header, 0, sizeof(answer_header));
-	answer_header.payload_size = size;
-	answer_header.op_code = op_code;
-	answer_header.error = 0;
-
-	/* send the answer */
-	ret = df_write_message(sock, &answer_header, answer_payload);
+		return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
+	memset(answer_header, 0, sizeof(*answer_header));
+	answer_header->payload_size = size;
+	answer_header->op_code = op_code;
+	answer_header->error = 0;
 
 	if (dbg) {
 		fprintf(stderr, "\tresult :\n");
 		fprintf(stderr, "\t  result : %s\n", link);
 	}
 
-	return ret;
+	return 0;
 }
 
-static int action_readdir(int sock, struct df_packet_header *header,
-		char *payload)
+static int action_readdir(struct df_packet_header *header, char *payload,
+		struct df_packet_header *answer_header, char **answer_payload)
 {
 	DIR *dp;
 	struct dirent *de;
 	int ret;
-	struct df_packet_header answer_header;
-	char __attribute__ ((cleanup(char_array_free))) *answer_payload = NULL;
 	size_t offset = 0;
 	char __attribute__ ((cleanup(char_array_free))) *path = NULL;
 	struct stat st;
@@ -227,9 +223,11 @@ static int action_readdir(int sock, struct df_packet_header *header,
 			DF_DATA_FUSE_FILE_INFO, &fi,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(sock, op_code, -ret);
+		return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
 	if (path[path_len - 1] != '\0')
-		return errno_reply(sock, op_code, -ret);
+		return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
 
 	if (dbg) {
 		fprintf(stderr, "path     = %s\n", path);
@@ -241,46 +239,47 @@ static int action_readdir(int sock, struct df_packet_header *header,
 
 	dp = opendir(path);
 	if (dp == NULL)
-		return -errno;
+		return errno_reply(op_code, -errno, answer_header,
+				answer_payload);
 
 	/* build the answer */
-	ret = df_build_payload(&answer_payload, &size,
+	ret = df_build_payload(answer_payload, &size,
 			DF_DATA_FUSE_FILE_INFO, &fi,
 			DF_DATA_BLOCK_END);
 	if (0 > ret)
-		return errno_reply(sock, op_code, -ret);
+		return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
 
 
 	while ((de = readdir(dp)) != NULL) {
 		memset(&st, 0, sizeof(st));
 		st.st_ino = de->d_ino;
 		st.st_mode = de->d_type << 12;
-		ret = df_build_payload(&answer_payload, &size,
+		ret = df_build_payload(answer_payload, &size,
 
 				DF_DATA_BUFFER, strlen(de->d_name) + 1,
 				de->d_name,
 				DF_DATA_STAT, &st,
 				DF_DATA_BLOCK_END);
 		if (0 > ret)
-			return errno_reply(sock, op_code, -ret);
+			return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
 	}
-
 	closedir(dp);
 
-	ret = df_build_payload(&answer_payload, &size,
+	/* terminate the payload */
+	ret = df_build_payload(answer_payload, &size,
 			DF_DATA_END);
 	if (0 > ret)
-		return errno_reply(sock, op_code, -ret);
+		return errno_reply(op_code, -ret, answer_header,
+				answer_payload);
 
-	memset(&answer_header, 0, sizeof(answer_header));
-	answer_header.payload_size = size;
-	answer_header.op_code = op_code;
-	answer_header.error = 0;
+	memset(answer_header, 0, sizeof(*answer_header));
+	answer_header->payload_size = size;
+	answer_header->op_code = op_code;
+	answer_header->error = 0;
 
-	/* send the answer */
-	ret = df_write_message(sock, &answer_header, answer_payload);
-
-	return ret;
+	return 0;
 }
 
 static int xmp_mknod(const char *path, mode_t mode, dev_t rdev)
@@ -591,14 +590,16 @@ static struct fuse_operations xmp_oper = {
 #endif
 };
 
-int action_enosys(int sock, struct df_packet_header *header,
-		char __attribute__((unused)) *payload)
+int action_enosys(struct df_packet_header *header,
+		char __attribute__((unused)) *payload,
+		struct df_packet_header *answer_header, char **answer_payload)
 {
-	return errno_reply(sock, header->op_code, ENOSYS);
+	return errno_reply(header->op_code, ENOSYS, answer_header,
+			answer_payload);
 }
 
-typedef int (*action_t)(int sock, struct df_packet_header *header,
-		char *payload);
+typedef int (*action_t)(struct df_packet_header *header, char *payload,
+		struct df_packet_header *answer_header, char **answer_payload);
 
 static action_t dispatch_table[] = {
 	[DF_OP_INVALID] = action_enosys,
@@ -635,7 +636,8 @@ static action_t dispatch_table[] = {
 	[DF_OP_QUIT] = action_enosys,
 };
 
-static int dispatch(int sock, struct df_packet_header *header, char *payload)
+static int dispatch(struct df_packet_header *header, char *payload,
+		struct df_packet_header *answer_header, char **answer_payload)
 {
 	action_t action;
 	enum df_op op = header->op_code;
@@ -649,7 +651,7 @@ static int dispatch(int sock, struct df_packet_header *header, char *payload)
 		return -EINVAL;
 	}
 
-	return action(sock, header, payload);
+	return action(header, payload, answer_header, answer_payload);
 }
 
 static int event_loop(int sock)
@@ -657,16 +659,24 @@ static int event_loop(int sock)
 	int ret;
 	struct df_packet_header header;
 	char __attribute__ ((cleanup(char_array_free))) *payload = NULL;
+	struct df_packet_header answer_header;
+	char __attribute__ ((cleanup(char_array_free))) *answer_payload = NULL;
 
 	do {
 		memset(&header, 0, sizeof(header));
-
 		ret = df_read_message(sock, &header, &payload);
 		if (0 > ret)
 			return ret;
 
-		ret = dispatch(sock, &header, payload);
+		memset(&answer_header, 0, sizeof(answer_header));
+		ret = dispatch(&header, payload,
+				&answer_header, &answer_payload);
 		FREE(payload);
+		if (0 > ret)
+			return ret;
+
+		ret = df_write_message(sock, &answer_header, answer_payload);
+		FREE(answer_payload);
 		if (0 > ret)
 			return ret;
 	} while (header.op_code != DF_OP_QUIT);
