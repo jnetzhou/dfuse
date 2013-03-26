@@ -107,4 +107,6 @@ int df_write_message(int fd, struct df_packet_header *header, char *payload);
 
 int df_remote_call(int sock, enum df_op op_code, ...);
 
+int df_remote_answer(int sock, enum df_op op_code, ...);
+
 #endif /* DF_PROTOCOL_H */

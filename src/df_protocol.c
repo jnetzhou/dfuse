@@ -675,3 +675,24 @@ int df_remote_call(int sock, enum df_op op_code, ...)
 
 	return df_write_message(sock, &header, payload);
 }
+
+int df_remote_answer(int sock, enum df_op op_code, ...)
+{
+	int ret;
+	struct df_packet_header header;
+	char __attribute__ ((cleanup(char_array_free)))*payload = NULL;
+	size_t offset = 0;
+	va_list args;
+
+	ret = df_read_message(sock, &header, &payload);
+	if (0 > ret)
+		return ret;
+	if (0 != header.error)
+		return -header.error;
+
+	va_start(args, op_code);
+	ret = df_vparse_payload(payload, &offset, header.payload_size, args);
+	va_end(args);
+
+	return ret;
+}
