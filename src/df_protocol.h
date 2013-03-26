@@ -91,6 +91,8 @@ int df_read_message(int fd, struct df_packet_header *header, char **payload);
  */
 int df_parse_payload(char *payload, size_t *offset, size_t size, ...);
 
+int df_vparse_payload(char *payload, size_t *offset, size_t size, va_list args);
+
 /**
  * builds a payload, given a list of arguments, (df_data_type, value) pairs,
  * ended by a DF_DATA_END, if payload is NULL, it is allocated, if not, new

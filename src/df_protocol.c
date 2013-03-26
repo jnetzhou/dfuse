@@ -422,7 +422,18 @@ static int pop_timespec(char *payload, size_t *offset, size_t size,
 
 int df_parse_payload(char *payload, size_t *offset, size_t size, ...)
 {
+	int ret = 0;
 	va_list args;
+
+	va_start(args, size);
+	ret = df_vparse_payload(payload, offset, size, args);
+	va_end(args);
+
+	return ret;
+}
+
+int df_vparse_payload(char *payload, size_t *offset, size_t size, va_list args)
+{
 	enum df_data_type requested_data_type;
 	enum df_data_type data_type;
 	int loop = 1;
@@ -439,23 +450,20 @@ int df_parse_payload(char *payload, size_t *offset, size_t size, ...)
 	if (NULL == payload || NULL == offset)
 		return -EINVAL;
 
-	va_start(args, size);
 	do {
 		requested_data_type = va_arg(args, enum df_data_type);
 		if (DF_DATA_BLOCK_END == requested_data_type)
-			break;
+			return 0;
 
 		ret = pop_data_type(payload, offset, size, &data_type);
 		if (0 > ret)
-			goto out;
+			return ret;
 		if (dbg)
 			fprintf(stderr, "Parsed %s\n",
 					df_data_type_to_str(data_type));
 
-		if (data_type != requested_data_type) {
-			ret = -EINVAL;
-			goto out;
-		}
+		if (data_type != requested_data_type)
+			return -EINVAL;
 
 		switch (data_type) {
 		case DF_DATA_BUFFER:
@@ -463,66 +471,50 @@ int df_parse_payload(char *payload, size_t *offset, size_t size, ...)
 			POP_DATA_POINTER(int_data);
 			ret = pop_int(payload, offset, size, int_data);
 			if (0 > ret)
-				goto out;
+				return ret;
 			/* get buffer data */
 			POP_DATA_POINTER(buffer_data);
 			ret = pop_buffer(payload, offset, size, buffer_data,
 					*int_data /* buffer size */
 					);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_FUSE_FILE_INFO:
 			POP_DATA_POINTER(ffi_data);
 			ret = pop_ffi(payload, offset, size, ffi_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_INT:
 			POP_DATA_POINTER(int_data);
 			ret = pop_int(payload, offset, size, int_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_STAT:
 			POP_DATA_POINTER(stat_data);
 			ret = pop_stat(payload, offset, size, stat_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_STATVFS:
 			POP_DATA_POINTER(statvfs_data);
 			ret = pop_statvfs(payload, offset, size, statvfs_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_TIMESPEC:
 			POP_DATA_POINTER(timespec_data);
 			ret = pop_timespec(payload, offset, size,
 					timespec_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_END:
 			loop = 0;
-			ret = 0;
 			break;
 
 		case DF_DATA_BLOCK_END:
 			/* never reached */
 			break;
 		}
-	} while (loop);
+	} while (loop && 0 == ret);
 #undef POP_DATA_POINTER
-
-out:
-	va_end(args);
 
 	return ret;
 }
