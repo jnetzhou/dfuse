@@ -57,19 +57,6 @@ static void char_array_free(char **array)
 	FREE(*array);
 }
 
-static int fill_header(struct df_packet_header *header, size_t size,
-		enum df_op op_code, int error)
-{
-	if (NULL == header)
-		return -EINVAL;
-
-	memset(header, 0, sizeof(*header));
-	header->payload_size = size;
-	header->op_code = op_code;
-	header->error = error;
-
-	return 0;
-}
 static int errno_reply(enum df_op op_code, int err,
 		struct df_packet_header *ans_hdr, char **ans_pld)
 {

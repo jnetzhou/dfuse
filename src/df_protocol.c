@@ -62,7 +62,6 @@ static const char const *type_to_str[] = {
 	[DF_DATA_TIMESPEC]       = "DF_DATA_TIMESPEC",
 };
 
-
 static void dump_header(struct df_packet_header *header, int in)
 {
 	char *direction = in ? "received" : "sent";
@@ -103,6 +102,20 @@ static void dump_payload(const char *payload, unsigned size, int in)
 					isprint(payload[i]) ? payload[i] : '.');
 		fprintf(stderr, "\n");
 	}
+}
+
+int fill_header(struct df_packet_header *header, size_t size,
+		enum df_op op_code, int error)
+{
+	if (NULL == header)
+		return -EINVAL;
+
+	memset(header, 0, sizeof(*header));
+	header->payload_size = size;
+	header->op_code = op_code;
+	header->error = error;
+
+	return 0;
 }
 
 const char *df_op_code_to_str(enum df_op op)

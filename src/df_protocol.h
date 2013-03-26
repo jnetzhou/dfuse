@@ -42,8 +42,6 @@ enum df_op {
 	DF_OP_QUIT, /**< send a "bye bye" message */
 };
 
-const char *df_op_code_to_str(enum df_op);
-
 /* packet header, aligned on 64bits */
 struct df_packet_header {
 	/** size of useful data in the payload part of the packet */
@@ -69,6 +67,11 @@ enum df_data_type {
 	DF_DATA_STATVFS,
 	DF_DATA_TIMESPEC,
 };
+
+int fill_header(struct df_packet_header *header, size_t size,
+		enum df_op op_code, int error);
+
+const char *df_op_code_to_str(enum df_op);
 
 int df_send_handshake(int fd, uint32_t prot_version);
 
