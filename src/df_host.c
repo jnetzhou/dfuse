@@ -50,7 +50,7 @@ static void char_array_free(char **array)
 	FREE(*array);
 }
 
-static int df_getattr(const char *path, struct stat *stbuf)
+static int df_getattr(const char *in_path, struct stat *out_stbuf)
 {
 	int ret;
 	char __attribute__ ((cleanup(char_array_free)))*payload = NULL;
@@ -64,7 +64,7 @@ static int df_getattr(const char *path, struct stat *stbuf)
 	size_t offset = 0;
 
 	ret = df_build_payload(&payload, &size,
-			DF_DATA_BUFFER, strlen(path) + 1, path,
+			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
 			DF_DATA_END);
 	if (0 > ret)
 		return ret;
@@ -81,17 +81,17 @@ static int df_getattr(const char *path, struct stat *stbuf)
 		return -header.error;
 
 	ret = df_parse_payload(answer_payload, &offset, header.payload_size,
-			DF_DATA_STAT, stbuf,
+			DF_DATA_STAT, out_stbuf,
 			DF_DATA_END);
 
 	if (dbg)
-		dump_stat(stbuf);
+		dump_stat(out_stbuf);
 
 	return ret;
 }
 
-static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-		       off_t offset, struct fuse_file_info *fi)
+static int df_readdir(const char *in_path, void *in_buf, fuse_fill_dir_t filler,
+		       off_t in_offset, struct fuse_file_info *in_fi)
 {
 	int ret;
 	char __attribute__ ((cleanup(char_array_free)))*payload = NULL;
@@ -103,14 +103,14 @@ static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	};
 	char __attribute__ ((cleanup(char_array_free)))*entry_path = NULL;
 	size_t payload_offset = 0;
-	int64_t ioffset = offset;
+	int64_t ioffset = in_offset;
 	int64_t len;
 	struct stat st;
 
 	ret = df_build_payload(&payload, &size,
-			DF_DATA_BUFFER, strlen(path) + 1, path,
+			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
 			DF_DATA_INT, ioffset,
-			DF_DATA_FUSE_FILE_INFO, fi,
+			DF_DATA_FUSE_FILE_INFO, in_fi,
 			DF_DATA_END);
 	if (0 > ret)
 		return ret;
@@ -124,21 +124,18 @@ static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	ret = df_read_message(sock, &header, &payload);
 	if (0 > ret)
 		return ret;
-	if (0 != header.error) {
-		fprintf(stderr, " *** %d %s, %s\n", header.error, payload,
-				strerror(header.error));
+	if (0 != header.error)
 		return -header.error;
-	}
 
 	ret = df_parse_payload(payload, &payload_offset, header.payload_size,
-			DF_DATA_FUSE_FILE_INFO, fi,
+			DF_DATA_FUSE_FILE_INFO, in_fi,
 			DF_DATA_BLOCK_END);
 	if (0 > ret)
 		return ret;
 
 	/*
-	 * all has been parsed when consumed data (offset) equals size minus 8
-	 * because the last DF_DATA_END is never popped
+	 * all has been parsed when consumed data (payload_offset) equals size
+	 * minus 8 because the last DF_DATA_END is popped out of the loop
 	 */
 	while (payload_offset + 8 < header.payload_size) {
 		ret = df_parse_payload(payload, &payload_offset,
@@ -149,20 +146,16 @@ static int df_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 				DF_DATA_BLOCK_END);
 		if (0 > ret)
 			return ret;
-		if (filler(buf, entry_path, &st, 0))
+		if (filler(in_buf, entry_path, &st, 0))
 			break;
 		FREE(entry_path);
 	}
 
-	ret = df_parse_payload(payload, &payload_offset, header.payload_size,
+	return df_parse_payload(payload, &payload_offset, header.payload_size,
 			DF_DATA_END);
-	if (0 > ret)
-		return ret;
-
-	return ret;
 }
 
-static int df_readlink(const char *path, char *buf, size_t size)
+static int df_readlink(const char *in_path, char *out_buf, size_t in_size)
 {
 	int ret;
 	char __attribute__((cleanup(char_array_free))) *payload = NULL;
@@ -174,11 +167,11 @@ static int df_readlink(const char *path, char *buf, size_t size)
 		.error = 0,
 	};
 	size_t offset = 0;
-	int64_t target_len = size;
+	int64_t target_len = in_size;
 	char __attribute__((cleanup(char_array_free))) *tmp_buf = NULL;
 
 	ret = df_build_payload(&payload, &pl_size,
-			DF_DATA_BUFFER, strlen(path) + 1, path,
+			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
 			DF_DATA_INT, target_len,
 			DF_DATA_END);
 	if (0 > ret)
@@ -199,12 +192,14 @@ static int df_readlink(const char *path, char *buf, size_t size)
 			DF_DATA_BUFFER, &target_len, &tmp_buf,
 			DF_DATA_END);
 
-	strncpy(buf, tmp_buf, size);
-	buf[size] = '\0';
+	/* TODO use a strlcpy implementation */
+	strncpy(out_buf, tmp_buf, in_size);
+	out_buf[in_size] = '\0';
 
 	if (dbg)
 		fprintf(stderr, "[%s] target of %s is %s\n",
-				df_op_code_to_str(header.op_code), path, buf);
+				df_op_code_to_str(header.op_code), in_path,
+				out_buf);
 
 	return ret;
 }
