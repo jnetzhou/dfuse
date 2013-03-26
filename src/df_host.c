@@ -37,8 +37,6 @@
  */
 static int sock = -1;
 
-static int dbg;
-
 #define FREE(p) do { \
 	if (p) \
 		free(p); \
@@ -84,9 +82,6 @@ static int df_getattr(const char *in_path, struct stat *out_stbuf)
 			DF_DATA_STAT, out_stbuf,
 			DF_DATA_END);
 
-	if (dbg)
-		dump_stat(out_stbuf);
-
 	return ret;
 }
 
@@ -119,8 +114,8 @@ static int df_readdir(const char *in_path, void *in_buf, fuse_fill_dir_t filler,
 	ret = df_write_message(sock, &header, payload);
 	if (0 > ret)
 		return ret;
-
 	FREE(payload);
+
 	ret = df_read_message(sock, &header, &payload);
 	if (0 > ret)
 		return ret;
@@ -195,11 +190,6 @@ static int df_readlink(const char *in_path, char *out_buf, size_t in_size)
 	/* TODO use a strlcpy implementation */
 	strncpy(out_buf, tmp_buf, in_size);
 	out_buf[in_size] = '\0';
-
-	if (dbg)
-		fprintf(stderr, "[%s] target of %s is %s\n",
-				df_op_code_to_str(header.op_code), in_path,
-				out_buf);
 
 	return ret;
 }
