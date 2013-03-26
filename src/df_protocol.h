@@ -100,6 +100,8 @@ int df_vparse_payload(char *payload, size_t *offset, size_t size, va_list args);
  */
 int df_build_payload(char **payload, size_t *size, ...);
 
+int df_vbuild_payload(char **payload, size_t *size, va_list args);
+
 /* write an entire message, header + payload */
 int df_write_message(int fd, struct df_packet_header *header, char *payload);
 

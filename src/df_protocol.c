@@ -521,7 +521,18 @@ int df_vparse_payload(char *payload, size_t *offset, size_t size, va_list args)
 
 int df_build_payload(char **payload, size_t *size, ...)
 {
+	int ret = 0;
 	va_list args;
+
+	va_start(args, size);
+	ret = df_vbuild_payload(payload, size, args);
+	va_end(args);
+
+	return ret;
+}
+
+int df_vbuild_payload(char **payload, size_t *size, va_list args)
+{
 	enum df_data_type data_type;
 	int loop = 1;
 	int ret = 0;
@@ -538,7 +549,6 @@ int df_build_payload(char **payload, size_t *size, ...)
 	if (NULL == payload || NULL == size)
 		return -EINVAL;
 
-	va_start(args, size);
 	do {
 		data_type = va_arg(args, enum df_data_type);
 		if (DF_DATA_BLOCK_END == data_type)
@@ -547,7 +557,7 @@ int df_build_payload(char **payload, size_t *size, ...)
 		/* prefix each datum by it's type */
 		ret = append_int(payload, size, data_type);
 		if (0 > ret)
-			goto out;
+			break;
 		if (dbg)
 			fprintf(stderr, "Append %s\n",
 					df_data_type_to_str(data_type));
@@ -559,61 +569,45 @@ int df_build_payload(char **payload, size_t *size, ...)
 			int_data = buffer_size;
 			ret = append_int(payload, size, int_data);
 			if (0 > ret)
-				goto out;
+				return ret;
 			ret = append_data(payload, size, buffer_data,
 					buffer_size);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_FUSE_FILE_INFO:
 			ffi_data = va_arg(args, struct fuse_file_info *);
 			ret = append_fuse_file_info(payload, size, ffi_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_INT:
 			int_data = va_arg(args, int64_t);
 			ret = append_int(payload, size, int_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_STAT:
 			stat_data = va_arg(args, struct stat *);
 			ret = append_stat(payload, size, stat_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_STATVFS:
 			statvfs_data = va_arg(args, struct statvfs *);
 			ret = append_statvfs(payload, size, statvfs_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_TIMESPEC:
 			timespec_data = va_arg(args, struct timespec *);
 			ret = append_timespec(payload, size, timespec_data);
-			if (0 > ret)
-				goto out;
 			break;
 
 		case DF_DATA_END:
 			loop = 0;
-			ret = 0;
 			break;
 
 		case DF_DATA_BLOCK_END:
 			/* never reached */
 			break;
 		}
-	} while (loop);
-
-out:
-	va_end(args);
+	} while (loop && 0 == ret);
 
 	return ret;
 }
