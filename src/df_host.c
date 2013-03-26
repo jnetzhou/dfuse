@@ -51,66 +51,37 @@ static void char_array_free(char **array)
 static int df_getattr(const char *in_path, struct stat *out_stbuf)
 {
 	int ret;
-	char __attribute__ ((cleanup(char_array_free)))*payload = NULL;
-	char __attribute__ ((cleanup(char_array_free)))*answer_payload = NULL;
-	size_t size = 0;
-	struct df_packet_header header;
-	size_t offset = 0;
+	enum df_op op_code = DF_OP_GETATTR;
 
-	ret = df_build_payload(&payload, &size,
+	ret = df_remote_call(sock, op_code,
 			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
 			DF_DATA_END);
 	if (0 > ret)
 		return ret;
 
-	ret = fill_header(&header, size, DF_OP_GETATTR, 0);
-	if (0 > ret)
-		return ret;
-	ret = df_write_message(sock, &header, payload);
-	if (0 > ret)
-		return ret;
-
-	ret = df_read_message(sock, &header, &answer_payload);
-	if (0 > ret)
-		return ret;
-	if (0 != header.error)
-		return -header.error;
-
-	ret = df_parse_payload(answer_payload, &offset, header.payload_size,
+	return df_remote_answer(sock, op_code,
 			DF_DATA_STAT, out_stbuf,
 			DF_DATA_END);
-
-	return ret;
 }
 
 static int df_readdir(const char *in_path, void *in_buf, fuse_fill_dir_t filler,
 		       off_t in_offset, struct fuse_file_info *in_fi)
 {
 	int ret;
-	char __attribute__ ((cleanup(char_array_free)))*payload = NULL;
-	size_t size = 0;
+	char __attribute__((cleanup(char_array_free))) *payload = NULL;
 	struct df_packet_header header;
-	char __attribute__ ((cleanup(char_array_free)))*entry_path = NULL;
+	char __attribute__((cleanup(char_array_free))) *entry_path = NULL;
 	size_t payload_offset = 0;
-	int64_t ioffset = in_offset;
 	int64_t len;
 	struct stat st;
 
-	ret = df_build_payload(&payload, &size,
+	ret = df_remote_call(sock, DF_OP_READDIR,
 			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
-			DF_DATA_INT, ioffset,
+			DF_DATA_INT, (int64_t)in_offset,
 			DF_DATA_FUSE_FILE_INFO, in_fi,
 			DF_DATA_END);
 	if (0 > ret)
 		return ret;
-
-	ret = fill_header(&header, size, DF_OP_READDIR, 0);
-	if (0 > ret)
-		return ret;
-	ret = df_write_message(sock, &header, payload);
-	if (0 > ret)
-		return ret;
-	FREE(payload);
 
 	ret = df_read_message(sock, &header, &payload);
 	if (0 > ret)
@@ -149,35 +120,18 @@ static int df_readdir(const char *in_path, void *in_buf, fuse_fill_dir_t filler,
 static int df_readlink(const char *in_path, char *out_buf, size_t in_size)
 {
 	int ret;
-	char __attribute__((cleanup(char_array_free))) *payload = NULL;
-	char __attribute__((cleanup(char_array_free))) *answer_payload = NULL;
-	size_t size = 0;
-	struct df_packet_header header;
-	size_t offset = 0;
 	int64_t target_len = in_size;
 	char __attribute__((cleanup(char_array_free))) *tmp_buf = NULL;
+	enum df_op op_code = DF_OP_READLINK;
 
-	ret = df_build_payload(&payload, &size,
+	ret = df_remote_call(sock, op_code,
 			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
 			DF_DATA_INT, target_len,
 			DF_DATA_END);
 	if (0 > ret)
 		return ret;
 
-	ret = fill_header(&header, size, DF_OP_READLINK, 0);
-	if (0 > ret)
-		return ret;
-	ret = df_write_message(sock, &header, payload);
-	if (0 > ret)
-		return ret;
-
-	ret = df_read_message(sock, &header, &answer_payload);
-	if (0 > ret)
-		return ret;
-	if (0 != header.error)
-		return -header.error;
-
-	ret = df_parse_payload(answer_payload, &offset, header.payload_size,
+	ret = df_remote_answer(sock, op_code,
 			DF_DATA_BUFFER, &target_len, &tmp_buf,
 			DF_DATA_END);
 
