@@ -81,6 +81,34 @@ static int df_open(const char *in_path, struct fuse_file_info *in_fi)
 			DF_DATA_END);
 }
 
+static int df_read(const char *in_path, char *out_buf, size_t in_size,
+		off_t in_offset, struct fuse_file_info *in_fi)
+{
+	int ret;
+	enum df_op op_code = DF_OP_READ;
+
+	int64_t res;
+	char __attribute__((cleanup(char_array_free))) *tmp_buf = NULL;
+
+	ret = df_remote_call(sock, op_code,
+			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
+			DF_DATA_INT, (int64_t)in_size,
+			DF_DATA_INT, (int64_t)in_offset,
+			DF_DATA_FUSE_FILE_INFO, in_fi,
+			DF_DATA_END);
+	if (0 > ret)
+		return ret;
+
+	ret = df_remote_answer(sock, op_code,
+				DF_DATA_BUFFER, &res, &tmp_buf,
+				DF_DATA_END);
+	memcpy(out_buf, tmp_buf, res);
+	if (0 > ret)
+		return ret;
+
+	return res;
+}
+
 static int df_readdir(const char *in_path, void *in_buf, fuse_fill_dir_t filler,
 		       off_t in_offset, struct fuse_file_info *in_fi)
 {
@@ -179,6 +207,7 @@ static int df_release(const char *in_path, struct fuse_file_info *in_fi)
 static struct fuse_operations df_oper = {
 	.getattr	= df_getattr,
 	.open		= df_open,
+	.read		= df_read,
 	.readdir	= df_readdir,
 	.readlink	= df_readlink,
 	.release	= df_release
