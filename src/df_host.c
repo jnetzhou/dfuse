@@ -159,11 +159,29 @@ static int df_readlink(const char *in_path, char *out_buf, size_t in_size)
 	return ret;
 }
 
+static int df_release(const char *in_path, struct fuse_file_info *in_fi)
+{
+	int ret;
+	enum df_op op_code = DF_OP_RELEASE;
+
+	ret = df_remote_call(sock, op_code,
+			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
+			DF_DATA_FUSE_FILE_INFO, in_fi,
+			DF_DATA_END);
+	if (0 > ret)
+		return ret;
+
+	return df_remote_answer(sock, op_code,
+			DF_DATA_FUSE_FILE_INFO, in_fi,
+			DF_DATA_END);
+}
+
 static struct fuse_operations df_oper = {
 	.getattr	= df_getattr,
 	.open		= df_open,
 	.readdir	= df_readdir,
 	.readlink	= df_readlink,
+	.release	= df_release
 };
 
 /**
