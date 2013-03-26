@@ -655,21 +655,42 @@ int df_write_message(int fd, struct df_packet_header *header, char *payload)
 	return ret;
 }
 
+int df_request_build(struct df_packet_header *header, char **payload,
+		enum df_op op_code, ...)
+{
+	int ret;
+	va_list args;
+
+	va_start(args, op_code);
+	ret = df_vrequest_build(header, payload, op_code, args);
+	va_end(args);
+
+	return ret;
+}
+
+int df_vrequest_build(struct df_packet_header *header, char **payload,
+		enum df_op op_code, va_list args)
+{
+	int ret;
+	size_t size = 0;
+
+	ret = df_vbuild_payload(payload, &size, args);
+	if (0 > ret)
+		return ret;
+
+	return fill_header(header, size, op_code, 0);
+}
+
 int df_remote_call(int sock, enum df_op op_code, ...)
 {
 	int ret;
 	struct df_packet_header header;
 	char __attribute__ ((cleanup(char_array_free)))*payload = NULL;
-	size_t size = 0;
 	va_list args;
 
 	va_start(args, op_code);
-	ret = df_vbuild_payload(&payload, &size, args);
+	ret = df_vrequest_build(&header, &payload, op_code, args);
 	va_end(args);
-	if (0 > ret)
-		return ret;
-
-	ret = fill_header(&header, size, op_code, 0);
 	if (0 > ret)
 		return ret;
 

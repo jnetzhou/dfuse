@@ -105,6 +105,12 @@ int df_vbuild_payload(char **payload, size_t *size, va_list args);
 /* write an entire message, header + payload */
 int df_write_message(int fd, struct df_packet_header *header, char *payload);
 
+int df_request_build(struct df_packet_header *header, char **payload,
+		enum df_op op_code, ...);
+
+int df_vrequest_build(struct df_packet_header *header, char **payload,
+		enum df_op op_code, va_list args);
+
 int df_remote_call(int sock, enum df_op op_code, ...);
 
 int df_remote_answer(int sock, enum df_op op_code, ...);
