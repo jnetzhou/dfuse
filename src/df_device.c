@@ -72,7 +72,6 @@ static int action_getattr(struct df_packet_header *header, char *payload,
 {
 	int ret;
 	size_t offset = 0;
-	size_t size = 0;
 	enum df_op op_code = DF_OP_GETATTR;
 
 	int64_t in_path_len;
@@ -93,14 +92,9 @@ static int action_getattr(struct df_packet_header *header, char *payload,
 	if (ret == -1)
 		return errno_reply(op_code, errno, ans_hdr, ans_pld);
 
-	/* build the answer */
-	ret = df_build_payload(ans_pld, &size,
+	return df_request_build(ans_hdr, ans_pld, op_code,
 			DF_DATA_STAT, &out_stat,
 			DF_DATA_END);
-	if (0 > ret)
-		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-
-	return fill_header(ans_hdr, size, op_code, 0);
 }
 
 static int xmp_access(const char *path, int mask)
@@ -119,7 +113,6 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 {
 	int ret;
 	size_t offset = 0;
-	size_t size = 0;
 	enum df_op op_code = DF_OP_GETATTR;
 
 	char __attribute__((cleanup(char_array_free))) *in_path = NULL;
@@ -146,14 +139,9 @@ static int action_readlink(struct df_packet_header *header, char *payload,
 	out_buf_len = MIN(ret + 1, in_size);
 	out_buf[out_buf_len - 1] = '\0';
 
-	/* build the answer */
-	ret = df_build_payload(ans_pld, &size,
+	return df_request_build(ans_hdr, ans_pld, op_code,
 			DF_DATA_BUFFER, out_buf_len, out_buf,
 			DF_DATA_END);
-	if (0 > ret)
-		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
-
-	return fill_header(ans_hdr, size, op_code, 0);
 }
 
 static int action_readdir(struct df_packet_header *header, char *payload,
