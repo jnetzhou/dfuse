@@ -97,6 +97,36 @@ static int action_getattr(struct df_packet_header *header, char *payload,
 			DF_DATA_END);
 }
 
+static int action_mknod(struct df_packet_header *header, char *payload,
+		struct df_packet_header *ans_hdr, char **ans_pld)
+{
+	int ret;
+	size_t offset = 0;
+	enum df_op op_code = DF_OP_MKNOD;
+
+	int64_t in_path_len;
+	char __attribute__ ((cleanup(char_array_free))) *in_path = NULL;
+	int64_t in_mode;
+	int64_t in_rdev;
+
+	/* retrieve the arguments */
+	ret = df_parse_payload(payload, &offset, header->payload_size,
+			DF_DATA_BUFFER, &in_path_len, &in_path,
+			DF_DATA_INT, &in_mode,
+			DF_DATA_INT, &in_rdev,
+			DF_DATA_END);
+	if (0 > ret)
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
+
+	/* perform the syscall */
+	ret = mknod(in_path, in_mode, in_rdev);
+	if (ret == -1)
+		return errno_reply(op_code, errno, ans_hdr, ans_pld);
+
+	return df_request_build(ans_hdr, ans_pld, op_code,
+			DF_DATA_END);
+}
+
 static int action_open(struct df_packet_header *header, char *payload,
 		struct df_packet_header *ans_hdr, char **ans_pld)
 {
@@ -344,7 +374,7 @@ static action_t dispatch_table[] = {
 	[DF_OP_OPEN] = action_open,
 	[DF_OP_READ] = action_read,
 	[DF_OP_RELEASE] = action_release,
-	[DF_OP_MKNOD] = action_enosys,
+	[DF_OP_MKNOD] = action_mknod,
 	[DF_OP_WRITE] = action_write,
 	[DF_OP_MKDIR] = action_enosys,
 	[DF_OP_UNLINK] = action_enosys,

@@ -64,6 +64,23 @@ static int df_getattr(const char *in_path, struct stat *out_stbuf)
 			DF_DATA_END);
 }
 
+static int df_mknod(const char *in_path, mode_t in_mode, dev_t in_rdev)
+{
+	int ret;
+	enum df_op op_code = DF_OP_MKNOD;
+
+	ret = df_remote_call(sock, op_code,
+			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
+			DF_DATA_INT, (int64_t)in_mode,
+			DF_DATA_INT, (int64_t)in_rdev,
+			DF_DATA_END);
+	if (0 > ret)
+		return ret;
+
+	return df_remote_answer(sock, op_code,
+			DF_DATA_END);
+}
+
 static int df_open(const char *in_path, struct fuse_file_info *in_fi)
 {
 	int ret;
@@ -233,6 +250,7 @@ static int df_write(const char *in_path, const char *in_buf, size_t in_size,
 static struct fuse_operations df_oper = {
 	.getattr	= df_getattr,
 	.open		= df_open,
+	.mknod		= df_mknod,
 	.read		= df_read,
 	.readdir	= df_readdir,
 	.readlink	= df_readlink,
