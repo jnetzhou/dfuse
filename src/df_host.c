@@ -109,32 +109,6 @@ static int df_read(const char *in_path, char *out_buf, size_t in_size,
 	return res;
 }
 
-static int df_write(const char *in_path, const char *in_buf, size_t in_size,
-		off_t in_offset, struct fuse_file_info *in_fi)
-{
-	int ret;
-	enum df_op op_code = DF_OP_WRITE;
-
-	int64_t out_res;
-
-	ret = df_remote_call(sock, op_code,
-			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
-			DF_DATA_BUFFER, in_size, in_buf,
-			DF_DATA_INT, (int64_t)in_offset,
-			DF_DATA_FUSE_FILE_INFO, in_fi,
-			DF_DATA_END);
-	if (0 > ret)
-		return ret;
-
-	ret = df_remote_answer(sock, op_code,
-				DF_DATA_INT, &out_res,
-				DF_DATA_END);
-	if (0 > ret)
-		return ret;
-
-	return out_res;
-}
-
 static int df_readdir(const char *in_path, void *in_buf, fuse_fill_dir_t filler,
 		       off_t in_offset, struct fuse_file_info *in_fi)
 {
@@ -228,6 +202,32 @@ static int df_release(const char *in_path, struct fuse_file_info *in_fi)
 	return df_remote_answer(sock, op_code,
 			DF_DATA_FUSE_FILE_INFO, in_fi,
 			DF_DATA_END);
+}
+
+static int df_write(const char *in_path, const char *in_buf, size_t in_size,
+		off_t in_offset, struct fuse_file_info *in_fi)
+{
+	int ret;
+	enum df_op op_code = DF_OP_WRITE;
+
+	int64_t out_res;
+
+	ret = df_remote_call(sock, op_code,
+			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
+			DF_DATA_BUFFER, in_size, in_buf,
+			DF_DATA_INT, (int64_t)in_offset,
+			DF_DATA_FUSE_FILE_INFO, in_fi,
+			DF_DATA_END);
+	if (0 > ret)
+		return ret;
+
+	ret = df_remote_answer(sock, op_code,
+				DF_DATA_INT, &out_res,
+				DF_DATA_END);
+	if (0 > ret)
+		return ret;
+
+	return out_res;
 }
 
 static struct fuse_operations df_oper = {
