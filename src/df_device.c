@@ -291,6 +291,40 @@ static int action_release(struct df_packet_header *header, char *payload,
 			DF_DATA_END);
 }
 
+static int action_write(struct df_packet_header *header, char *payload,
+		struct df_packet_header *ans_hdr, char **ans_pld)
+{
+	int ret;
+	size_t offset = 0;
+	enum df_op op_code = DF_OP_WRITE;
+
+	int64_t in_path_len;
+	char __attribute__ ((cleanup(char_array_free))) *in_path = NULL;
+	int64_t in_size;
+	char __attribute__ ((cleanup(char_array_free))) *in_buf = NULL;
+	int64_t in_offset;
+	struct fuse_file_info in_fi;
+
+	/* retrieve the arguments */
+	ret = df_parse_payload(payload, &offset, header->payload_size,
+			DF_DATA_BUFFER, &in_path_len, &in_path,
+			DF_DATA_BUFFER, &in_size, &in_buf,
+			DF_DATA_INT, &in_offset,
+			DF_DATA_FUSE_FILE_INFO, &in_fi,
+			DF_DATA_END);
+	if (0 > ret)
+		return errno_reply(op_code, -ret, ans_hdr, ans_pld);
+
+	/* perform the syscall */
+	ret = pwrite(in_fi.fh, in_buf, in_size, in_offset);
+	if (ret == -1)
+		return errno_reply(op_code, errno, ans_hdr, ans_pld);
+
+	return df_request_build(ans_hdr, ans_pld, op_code,
+			DF_DATA_INT, (int64_t)ret,
+			DF_DATA_END);
+}
+
 int action_enosys(struct df_packet_header *header,
 		char __attribute__((unused)) *payload,
 		struct df_packet_header *ans_hdr, char **ans_pld)
@@ -311,7 +345,7 @@ static action_t dispatch_table[] = {
 	[DF_OP_OPEN] = action_open,
 	[DF_OP_RELEASE] = action_release,
 	[DF_OP_READ] = action_read,
-	[DF_OP_WRITE] = action_enosys,
+	[DF_OP_WRITE] = action_write,
 	[DF_OP_UNLINK] = action_enosys,
 	[DF_OP_RMDIR] = action_enosys,
 
