@@ -338,14 +338,15 @@ typedef int (*action_t)(struct df_packet_header *header, char *payload,
 static action_t dispatch_table[] = {
 	[DF_OP_INVALID] = action_enosys,
 
-	[DF_OP_READDIR] = action_readdir,
 	[DF_OP_GETATTR] = action_getattr,
+	[DF_OP_READDIR] = action_readdir,
 	[DF_OP_READLINK] = action_readlink,
-	[DF_OP_MKDIR] = action_enosys,
 	[DF_OP_OPEN] = action_open,
-	[DF_OP_RELEASE] = action_release,
 	[DF_OP_READ] = action_read,
+	[DF_OP_RELEASE] = action_release,
+	[DF_OP_MKNOD] = action_enosys,
 	[DF_OP_WRITE] = action_write,
+	[DF_OP_MKDIR] = action_enosys,
 	[DF_OP_UNLINK] = action_enosys,
 	[DF_OP_RMDIR] = action_enosys,
 
@@ -357,7 +358,6 @@ static action_t dispatch_table[] = {
 	[DF_OP_SYMLINK] = action_enosys,
 	[DF_OP_LINK] = action_enosys,
 
-	[DF_OP_MKNOD] = action_enosys,
 	[DF_OP_UTIMENS] = action_enosys,
 	[DF_OP_STATFS] = action_enosys,
 	[DF_OP_FSYNC] = action_enosys,
