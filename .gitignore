@@ -6,3 +6,4 @@ doc
 tags
 python
 build
+*.swp
