@@ -48,6 +48,22 @@ static void char_array_free(char **array)
 	FREE(*array);
 }
 
+static int df_access(const char *in_path, int in_mask)
+{
+	int ret;
+	enum df_op op_code = DF_OP_ACCESS;
+
+	ret = df_remote_call(sock, op_code,
+			DF_DATA_BUFFER, strlen(in_path) + 1, in_path,
+			DF_DATA_INT, (int64_t)in_mask,
+			DF_DATA_END);
+	if (0 > ret)
+		return ret;
+
+	return df_remote_answer(sock, op_code,
+			DF_DATA_END);
+}
+
 static int df_getattr(const char *in_path, struct stat *out_stbuf)
 {
 	int ret;
@@ -263,6 +279,7 @@ static int df_write(const char *in_path, const char *in_buf, size_t in_size,
 }
 
 static struct fuse_operations df_oper = {
+	.access		= df_access,
 	.getattr	= df_getattr,
 	.open		= df_open,
 	.mknod		= df_mknod,
