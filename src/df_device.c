@@ -8,9 +8,19 @@
 
   gcc -Wall fusexmp.c `pkg-config fuse --cflags --libs` -o fusexmp
 */
+#define USE_UNIX_SOCKET
+
 #include <sys/types.h>
 #include <sys/socket.h>
+#ifdef USE_UNIX_SOCKET
+#include <sys/un.h>
+struct sockaddr_un __sizecheck;
+#ifndef UNIX_PATH_MAX
+#define UNIX_PATH_MAX sizeof(__sizecheck.sun_path)
+#endif
+#else
 #include <netinet/ip.h>
+#endif
 
 #define FUSE_USE_VERSION 26
 
@@ -505,21 +515,33 @@ int main(void)
 {
 	int sock = -1;
 	int ret;
+#ifdef USE_UNIX_SOCKET
+	struct sockaddr_un addr;
+	int domain = AF_UNIX;
+#else
 	struct sockaddr_in addr;
+	int domain = AF_INET;
+#endif
 	socklen_t addr_len = sizeof(addr);
 	uint32_t host_version;
 	sigset_t sig;
 
-	sock = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	sock = socket(domain, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (0 > sock) {
 		perror("socket");
 		return EXIT_FAILURE;
 	}
 
 	memset(&addr, 0, addr_len);
+#ifdef USE_UNIX_SOCKET
+	addr.sun_family = AF_UNIX;
+	snprintf(addr.sun_path + 1, UNIX_PATH_MAX - 1, "dfuse.socket");
+	*addr.sun_path = '\0';
+#else
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	addr.sin_port = htons(DF_DEVICE_PORT);
+#endif
 
 	printf("Attempt to connect to host\n");
 

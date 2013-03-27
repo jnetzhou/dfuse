@@ -5,10 +5,20 @@
  *
  * dfuse, or droid fuse : file system in userspace over the adb protocol
  */
+#define USE_UNIX_SOCKET
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#ifdef USE_UNIX_SOCKET
+#include <sys/un.h>
+struct sockaddr_un __sizecheck;
+#ifndef UNIX_PATH_MAX
+#define UNIX_PATH_MAX sizeof(__sizecheck.sun_path)
+#endif
+#else
 #include <netinet/ip.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -319,8 +329,15 @@ int main(int argc, char *argv[])
 {
 	int ret;
 	uint32_t device_version = 0;
+#ifdef USE_UNIX_SOCKET
+	struct sockaddr_un addr;
+	struct sockaddr_un cli_addr;
+	int domain = AF_UNIX;
+#else
 	struct sockaddr_in addr;
 	struct sockaddr_in cli_addr;
+	int domain = AF_INET;
+#endif
 	socklen_t addr_len = sizeof(addr);
 	int srv_sock;
 	int optval = 1;
@@ -332,7 +349,7 @@ int main(int argc, char *argv[])
 	}
 	*/
 
-	srv_sock = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	srv_sock = socket(domain, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (-1 == srv_sock) {
 		perror("socket");
 		return EXIT_FAILURE;
@@ -346,9 +363,15 @@ int main(int argc, char *argv[])
 	}
 
 	memset(&addr, 0, addr_len);
+#ifdef USE_UNIX_SOCKET
+	addr.sun_family = AF_UNIX;
+	snprintf(addr.sun_path + 1, UNIX_PATH_MAX - 1, "dfuse.socket");
+	*addr.sun_path = '\0';
+#else
 	addr.sin_family = AF_INET;
 	addr.sin_addr.s_addr = INADDR_ANY;
 	addr.sin_port = htons(DF_HOST_PORT);
+#endif
 
 	ret = bind(srv_sock, (struct sockaddr *)&addr, addr_len);
 	if (-1 == ret) {
