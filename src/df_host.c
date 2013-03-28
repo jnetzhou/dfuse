@@ -23,6 +23,7 @@ struct sockaddr_un __sizecheck;
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <errno.h>
 
 #include <fdevent.h>
@@ -38,7 +39,6 @@ struct sockaddr_un __sizecheck;
 #include "df_protocol.h"
 #include "df_data_types.h"
 
-/* #define DF_HOST_PORT 6665 */
 #define DF_HOST_PORT 6666
 
 /**
@@ -328,37 +328,20 @@ static struct fuse_operations df_oper = {
 int main(int argc, char *argv[])
 {
 	int ret;
-	uint32_t device_version = 0;
 #ifdef USE_UNIX_SOCKET
 	struct sockaddr_un addr;
-	struct sockaddr_un cli_addr;
 	int domain = AF_UNIX;
 #else
 	struct sockaddr_in addr;
-	struct sockaddr_in cli_addr;
 	int domain = AF_INET;
 #endif
 	socklen_t addr_len = sizeof(addr);
-	int srv_sock;
-	int optval = 1;
+	uint32_t host_version;
+	sigset_t sig;
 
-	/* TODO set up forwarding to device
-	if (!can_talk_to_a_device()) {
-		fprintf(stderr, "can't talk to a device : '%s'\n", adb_error());
-		return EXIT_FAILURE;
-	}
-	*/
-
-	srv_sock = socket(domain, SOCK_STREAM | SOCK_CLOEXEC, 0);
-	if (-1 == srv_sock) {
+	sock = socket(domain, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (0 > sock) {
 		perror("socket");
-		return EXIT_FAILURE;
-	}
-
-	ret = setsockopt(srv_sock, SOL_SOCKET, SO_REUSEADDR, &optval,
-			sizeof(optval));
-	if (0 > ret) {
-		perror("setsockopt");
 		return EXIT_FAILURE;
 	}
 
@@ -369,56 +352,42 @@ int main(int argc, char *argv[])
 	*addr.sun_path = '\0';
 #else
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = INADDR_ANY;
+	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 	addr.sin_port = htons(DF_HOST_PORT);
 #endif
 
-	ret = bind(srv_sock, (struct sockaddr *)&addr, addr_len);
-	if (-1 == ret) {
-		perror("bind");
+	printf("Attempt to connect to device\n");
+
+	ret = connect(sock, (struct sockaddr *)&addr, addr_len);
+	if (0 > ret) {
+		perror("socket");
 		return EXIT_FAILURE;
 	}
 
-	ret = listen(srv_sock, 1);
-	if (-1 == ret) {
-		perror("listen");
+	printf("Connected to device\n");
+
+	sigemptyset(&sig);
+	sigaddset(&sig, SIGPIPE);
+	sigprocmask(SIG_BLOCK, &sig, NULL);
+
+	ret = df_read_handshake(sock, &host_version);
+	if (0 > ret)
 		return EXIT_FAILURE;
-	}
-
-	/* TODO launch the client */
-
-	printf("Waiting for client\n");
-
-	memset(&cli_addr, 0, addr_len);
-	sock = accept4(srv_sock, (struct sockaddr *)&cli_addr, &addr_len,
-			SOCK_CLOEXEC);
-	if (-1 == sock) {
-		perror("accept");
-		return EXIT_FAILURE;
-	}
-
-	printf("Client %d is connected\n", sock);
 
 	ret = df_send_handshake(sock, DF_PROTOCOL_VERSION);
 	if (0 > ret)
 		return EXIT_FAILURE;
 
-	ret = df_read_handshake(sock, &device_version);
-	if (0 > ret)
-		return EXIT_FAILURE;
-
-	if (device_version != DF_PROTOCOL_VERSION) {
+	if (host_version != DF_PROTOCOL_VERSION) {
 		printf("protocol version mismatch, host : %u, device : %u\n",
-				DF_PROTOCOL_VERSION, device_version);
+				host_version, DF_PROTOCOL_VERSION);
 		return EXIT_FAILURE;
 	}
 
-	printf("File system initialization\n");
-
 	ret = fuse_main(argc, argv, &df_oper, NULL);
 
-	close(sock);
-	close(srv_sock);
+	if (-1 != sock)
+		close(sock);
 
 	return ret;
 }

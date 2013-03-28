@@ -513,22 +513,39 @@ static int event_loop(int sock)
 
 int main(void)
 {
-	int sock = -1;
 	int ret;
+	uint32_t device_version = 0;
 #ifdef USE_UNIX_SOCKET
 	struct sockaddr_un addr;
+	struct sockaddr_un cli_addr;
 	int domain = AF_UNIX;
 #else
 	struct sockaddr_in addr;
+	struct sockaddr_in cli_addr;
 	int domain = AF_INET;
 #endif
 	socklen_t addr_len = sizeof(addr);
-	uint32_t host_version;
-	sigset_t sig;
+	int srv_sock = -1;
+	int sock = -1;
+	int optval = 1;
 
-	sock = socket(domain, SOCK_STREAM | SOCK_CLOEXEC, 0);
-	if (0 > sock) {
+	/* TODO set up forwarding to device
+	if (!can_talk_to_a_device()) {
+		fprintf(stderr, "can't talk to a device : '%s'\n", adb_error());
+		return EXIT_FAILURE;
+	}
+	*/
+
+	srv_sock = socket(domain, SOCK_STREAM | SOCK_CLOEXEC, 0);
+	if (-1 == srv_sock) {
 		perror("socket");
+		return EXIT_FAILURE;
+	}
+
+	ret = setsockopt(srv_sock, SOL_SOCKET, SO_REUSEADDR, &optval,
+			sizeof(optval));
+	if (0 > ret) {
+		perror("setsockopt");
 		return EXIT_FAILURE;
 	}
 
@@ -539,42 +556,61 @@ int main(void)
 	*addr.sun_path = '\0';
 #else
 	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addr.sin_addr.s_addr = INADDR_ANY;
 	addr.sin_port = htons(DF_DEVICE_PORT);
 #endif
 
-	printf("Attempt to connect to host\n");
-
-	ret = connect(sock, (struct sockaddr *)&addr, addr_len);
-	if (0 > ret) {
-		perror("socket");
+	ret = bind(srv_sock, (struct sockaddr *)&addr, addr_len);
+	if (-1 == ret) {
+		perror("bind");
 		return EXIT_FAILURE;
 	}
 
-	printf("Connected to host\n");
-
-	sigemptyset(&sig);
-	sigaddset(&sig, SIGPIPE);
-	sigprocmask(SIG_BLOCK, &sig, NULL);
-
-	ret = df_read_handshake(sock, &host_version);
-	if (0 > ret)
+	ret = listen(srv_sock, 1);
+	if (-1 == ret) {
+		perror("listen");
 		return EXIT_FAILURE;
+	}
+
+	/* TODO launch the client */
+
+	printf("Waiting for host\n");
+
+	memset(&cli_addr, 0, addr_len);
+#ifdef HAVE_ACCEPT4
+	sock = accept4(srv_sock, (struct sockaddr *)&cli_addr, &addr_len,
+			SOCK_CLOEXEC);
+#else
+	sock = accept(srv_sock, (struct sockaddr *)&cli_addr, &addr_len);
+	/* TODO add setting of the cloexec flag separately */
+#endif
+	if (-1 == sock) {
+		perror("accept");
+		return EXIT_FAILURE;
+	}
+
+	printf("host %d is connected\n", sock);
 
 	ret = df_send_handshake(sock, DF_PROTOCOL_VERSION);
 	if (0 > ret)
 		return EXIT_FAILURE;
 
-	if (host_version != DF_PROTOCOL_VERSION) {
+	ret = df_read_handshake(sock, &device_version);
+	if (0 > ret)
+		return EXIT_FAILURE;
+
+	if (device_version != DF_PROTOCOL_VERSION) {
 		printf("protocol version mismatch, host : %u, device : %u\n",
-				host_version, DF_PROTOCOL_VERSION);
+				DF_PROTOCOL_VERSION, device_version);
 		return EXIT_FAILURE;
 	}
 
+	printf("Server listening for requests\n");
+
 	ret = event_loop(sock);
 
-	if (-1 != sock)
-		close(sock);
+	close(sock);
+	close(srv_sock);
 
 	return ret;
 }
