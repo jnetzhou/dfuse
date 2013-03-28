@@ -6,3 +6,5 @@ doc
 tags
 python
 *.swp
+build/df_device
+build/df_host
