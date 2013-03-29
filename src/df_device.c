@@ -33,6 +33,9 @@ struct sockaddr_un __sizecheck;
 #define _XOPEN_SOURCE 700
 #endif
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <fuse.h>
 #include <stdio.h>
@@ -511,7 +514,16 @@ static int event_loop(int sock)
 	return 0;
 }
 
-int main(void)
+static int usage(int status, const char *path)
+{
+	printf("usage : %s [local]\n", path);
+	printf("\tlocal mode is used for testing with both device and host ");
+	printf("parts running on the same PC machine\n");
+
+	return status;
+}
+
+int main(int argc, char *argv[])
 {
 	int ret;
 	uint32_t device_version = 0;
@@ -528,6 +540,14 @@ int main(void)
 	int srv_sock = -1;
 	int sock = -1;
 	int optval = 1;
+	int local = 0;
+
+	if (argc != 1) {
+		if (strcmp("local", argv[1]) == 0)
+			local = 1;
+		else
+			return usage(EXIT_FAILURE, basename(argv[0]));
+	}
 
 	/* TODO set up forwarding to device
 	if (!can_talk_to_a_device()) {
@@ -536,7 +556,8 @@ int main(void)
 	}
 	*/
 
-	printf("dfuse device daemon (build "__DATE__" - "__TIME__")\n");
+	printf("dfuse device daemon %s(build "__DATE__" - "__TIME__")\n",
+			local ? "in local mode " : "");
 
 	srv_sock = socket(domain, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (-1 == srv_sock) {
