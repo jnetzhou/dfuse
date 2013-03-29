@@ -339,6 +339,8 @@ int main(int argc, char *argv[])
 	uint32_t host_version;
 	sigset_t sig;
 
+	printf("dfuse host daemon (build "__DATE__" - "__TIME__")\n");
+
 	sock = socket(domain, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (0 > sock) {
 		perror("socket");

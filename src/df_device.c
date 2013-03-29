@@ -536,6 +536,8 @@ int main(void)
 	}
 	*/
 
+	printf("dfuse device daemon (build "__DATE__" - "__TIME__")\n");
+
 	srv_sock = socket(domain, SOCK_STREAM | SOCK_CLOEXEC, 0);
 	if (-1 == srv_sock) {
 		perror("socket");
